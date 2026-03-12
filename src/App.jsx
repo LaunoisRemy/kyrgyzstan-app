@@ -835,7 +835,9 @@ export default function App() {
           }
           const deletePoint = (id) => {
             if (mapPoints.length <= 1) return
-            savePoints(mapPoints.filter(p => p.id !== id))
+            const p = mapPoints.find(pt => pt.id === id)
+            if (!confirm(`Supprimer le point "${p?.name || ''}" ?`)) return
+            savePoints(mapPoints.filter(pt => pt.id !== id))
           }
           const inputStyle = { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.4rem .6rem', color: 'var(--bone)', fontSize: '.8rem' }
           return (
@@ -1030,11 +1032,23 @@ export default function App() {
             setNewItemText('')
           }
           const removeItem = (itemId) => {
+            const item = checklist.items.find(i => i.id === itemId)
+            if (!confirm(`Supprimer "${item?.text || ''}" pour tout le monde ?`)) return
             const newChecked = {}
             for (const [name, arr] of Object.entries(checklist.checked)) {
               newChecked[name] = arr.filter(id => id !== itemId)
             }
             saveCheck({ items: checklist.items.filter(i => i.id !== itemId), checked: newChecked })
+          }
+          const backupChecklist = () => {
+            kvSet('kg-checklist-backup', checklist.items)
+            alert(`Sauvegarde effectuée ! (${checklist.items.length} items)`)
+          }
+          const restoreChecklist = async () => {
+            const backup = await kvGet('kg-checklist-backup')
+            if (!backup || backup.length === 0) { alert('Aucune sauvegarde trouvée.'); return }
+            if (!confirm(`Restaurer la sauvegarde (${backup.length} items) ? Les items actuels seront remplacés.`)) return
+            saveCheck({ items: backup, checked: Object.fromEntries(TRIP.members.map(m => [m.name, []])) })
           }
           const userChecked = checklist.checked[checklistUser] || []
           const totalItems = checklist.items.length
@@ -1101,10 +1115,14 @@ export default function App() {
               <button onClick={addItem} disabled={!newItemText.trim()} style={{ padding: '.4rem .7rem', background: newItemText.trim() ? 'rgba(196,149,106,.15)' : 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: newItemText.trim() ? 'var(--amber)' : 'var(--muted)', cursor: newItemText.trim() ? 'pointer' : 'default', fontSize: '.82rem' }}>+</button>
             </div>
 
-            {/* Discord link */}
-            <a href={TRIP.discord} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', padding: '.4rem .8rem', background: 'rgba(114,137,218,.1)', border: '1px solid rgba(114,137,218,.2)', borderRadius: '3px', color: '#7289da', fontSize: '.74rem', textDecoration: 'none' }}>
-              💬 Voir aussi Discord · #matos
-            </a>
+            {/* Backup / Restore + Discord */}
+            <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={backupChecklist} style={{ fontSize: '.74rem', padding: '.35rem .7rem', background: 'rgba(76,175,122,.1)', border: '1px solid rgba(76,175,122,.25)', borderRadius: '3px', color: 'var(--green)', cursor: 'pointer' }}>💾 Sauvegarder la liste</button>
+              <button onClick={restoreChecklist} style={{ fontSize: '.74rem', padding: '.35rem .7rem', background: 'rgba(224,112,80,.1)', border: '1px solid rgba(224,112,80,.25)', borderRadius: '3px', color: '#e07050', cursor: 'pointer' }}>♻ Restaurer</button>
+              <a href={TRIP.discord} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', padding: '.35rem .7rem', background: 'rgba(114,137,218,.1)', border: '1px solid rgba(114,137,218,.2)', borderRadius: '3px', color: '#7289da', fontSize: '.74rem', textDecoration: 'none', marginLeft: 'auto' }}>
+                💬 Discord · #matos
+              </a>
+            </div>
           </>
           )
         })()}
