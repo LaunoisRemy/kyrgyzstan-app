@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { kvGet, kvSet, kvSubscribe } from './supabase.js'
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 
 // ─── Trip constants ────────────────────────────────────────────────────────
 const TRIP = {
@@ -17,18 +20,44 @@ const TRIP = {
     { name: 'Thibault Azemar' },
     { name: 'Thomas Mestrou' },
   ],
-  tricount: 'https://tricount.com/toQoxjLLDpiWDYrUGb',
+  tricount: 'https://tricount.com/tAvBEZtPaFwCGOVPmZ',
   drive: 'https://drive.google.com/drive/folders/1EYBsgJAOiabYTCtLQQ1D0zBIisESeV36?usp=sharing',
+  miro: 'https://miro.com/welcomeonboard/cFBSTGdYczZjNS9QQ1NOL3FlbnRnYkN6UlZ0S1dqaWZxTUovUHhCaUwrM3liYnpFcExtWUZhTmhtUndnVC80QU5UbkVoU0lUMnQrSFRDWHpremtFVC92ZU1iSXRQVlI4Q2FWKzYvQ1dWbGM3bk53b1lNaTRjNDZNZGk2SW5zRlBBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=438974220017',
+  discord: 'https://discord.gg/eGspcXmcD8',
   horseAgency: 'Tatosh',
 }
 
 const AGENCIES = [
-  { id: 'tatosh', name: 'Tatosh', url: null, note: '4j/3n · 200€/p · ✅ CHOISI PAR LE GROUPE', chosen: true, contact: 'Henri Blln' },
+  { id: 'tatosh', name: 'Tatosh', url: 'https://gtla.net/rando-cheval-song-kul/', note: '4j/3n · 200€/p · ✅ CHOISI PAR LE GROUPE', chosen: true, contact: 'Henri Blln' },
   { id: 'visitalay', name: 'Visit Alay', url: 'https://visitalay.com/tour/song-kol-horse-trek-adventure/', note: '5j/4n · 730€/p · Non retenu', chosen: false },
 ]
 
+// ─── Map waypoints (defaults) ────────────────────────────────────────────
+const DEFAULT_MAP_POINTS = [
+  { id: 1, name: 'Bichkek', lat: 42.8746, lng: 74.5698, phase: 'city', day: 1, desc: 'Arrivée, Halo Hostel' },
+  { id: 2, name: 'Kyzart', lat: 42.26, lng: 75.56, phase: 'horse', day: 2, desc: 'Arrivée en 4x4 à midi' },
+  { id: 3, name: 'Kilemche', lat: 42.05, lng: 75.35, phase: 'horse', day: 2, desc: '3h à cheval → camp Kilemche' },
+  { id: 4, name: 'Lac Song-Köl', lat: 41.84, lng: 75.15, phase: 'horse', day: 3, desc: '3h à cheval → lac Song-Köl' },
+  { id: 5, name: 'Song-Köl · Kyrjol', lat: 41.80, lng: 75.25, phase: 'horse', day: 4, desc: 'Camp Tuz Ashuu → Camp Kyrjol, bord du lac' },
+  { id: 6, name: 'Kyzart (retour)', lat: 42.26, lng: 75.56, phase: 'horse', day: 5, desc: '3h à cheval, déjeuner à Kyzart' },
+]
+
+const PHASE_COLORS = { city: '#9c78cd', horse: '#c4956a', '4x4': '#5b9bd5', return: '#9c78cd' }
+
+function sortPoints(pts) {
+  return [...pts].sort((a, b) => a.day - b.day || a.id - b.id)
+}
+
+function getPointLabel(point, allPoints) {
+  const sameDay = allPoints.filter(p => p.day === point.day)
+  if (sameDay.length === 1) return `J${point.day}`
+  const sorted = sameDay.sort((a, b) => a.id - b.id)
+  const idx = sorted.findIndex(p => p.id === point.id) + 1
+  return `J${point.day}.${idx}`
+}
+
 // ─── Build 16 days Jul 30 → Aug 14 ────────────────────────────────────────
-// J1 = Bichkek city, J2-J6 = horse, J7-J15 = 4x4, J16 = return flight
+// J1 = Bichkek city, J2-J5 = horse, J6-J15 = 4x4, J16 = return flight
 function buildDays() {
   const mo = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc']
   const dn = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam']
@@ -38,7 +67,7 @@ function buildDays() {
     return {
       num: i + 1,
       dateStr: `${dn[d.getDay()]} ${d.getDate()} ${mo[d.getMonth()]}`,
-      phase: i === 0 ? 'city' : i === 15 ? 'return' : i < 6 ? 'horse' : '4x4',
+      phase: i === 0 ? 'city' : i === 15 ? 'return' : i < 5 ? 'horse' : '4x4',
       isArrival: i === 0,
       isDeparture: i === 15,
     }
@@ -47,10 +76,75 @@ function buildDays() {
 const DAYS = buildDays()
 
 function emptyDay(day) {
-  if (day.phase === 'city') return { location: 'Bichkek', activity: '', accommodation: 'Hôtel', notes: '', confirmed: false }
+  if (day.phase === 'city') return { location: 'Bichkek', activity: '', accommodation: 'Halo Hostel', notes: '', confirmed: false }
   if (day.phase === 'return') return { location: 'Bichkek', activity: 'Vol PC703 08h20 → Istanbul → Genève 16h20', accommodation: 'Aéroport Manas', notes: '', confirmed: false }
   if (day.phase === 'horse') return { location: '', activity: '', accommodation: 'Yourte', circuit: '', notes: '', confirmed: false }
   return { location: '', activity: '', accommodation: '', transport: '4×4', route: '', notes: '', confirmed: false }
+}
+
+const CHECKLIST_CATS = [
+  { id: 'Vêtements', icon: '👕' },
+  { id: 'Campement', icon: '⛺' },
+  { id: 'Équipement', icon: '🎒' },
+  { id: 'Documents', icon: '📄' },
+]
+const DEFAULT_CHECKLIST = {
+  items: [
+    { id: 1, text: 'Sous-vêtements mérinos (2-3)', cat: 'Vêtements' },
+    { id: 2, text: 'Haut thermique (mérinos)', cat: 'Vêtements' },
+    { id: 3, text: 'Bas thermique (mérinos)', cat: 'Vêtements' },
+    { id: 4, text: 'Chaussettes mérinos (2-3)', cat: 'Vêtements' },
+    { id: 5, text: 'T-shirt mérinos', cat: 'Vêtements' },
+    { id: 6, text: 'Polaire', cat: 'Vêtements' },
+    { id: 7, text: 'Pantalon rando / short', cat: 'Vêtements' },
+    { id: 8, text: 'Doudoune', cat: 'Vêtements' },
+    { id: 9, text: 'Veste de pluie coupe-vent', cat: 'Vêtements' },
+    { id: 10, text: 'Chaussures de rando', cat: 'Vêtements' },
+    { id: 11, text: 'Claquettes', cat: 'Vêtements' },
+    { id: 12, text: 'Gants', cat: 'Vêtements' },
+    { id: 13, text: 'Bonnet', cat: 'Vêtements' },
+    { id: 14, text: 'Tour de cou', cat: 'Vêtements' },
+    { id: 15, text: 'Tente', cat: 'Campement' },
+    { id: 16, text: 'Duvet (confort 0°C minimum)', cat: 'Campement' },
+    { id: 17, text: 'Matelas (R-value 3 minimum)', cat: 'Campement' },
+    { id: 18, text: 'Oreiller', cat: 'Campement' },
+    { id: 19, text: 'Kit réchaud popote léger', cat: 'Campement' },
+    { id: 20, text: 'Sac à dos de randonnée', cat: 'Équipement' },
+    { id: 21, text: 'Bâtons (fortement conseillé)', cat: 'Équipement' },
+    { id: 22, text: 'Sacs de rangement étanches', cat: 'Équipement' },
+    { id: 23, text: 'Lunettes de soleil', cat: 'Équipement' },
+    { id: 24, text: 'Casquette / chapeau', cat: 'Équipement' },
+    { id: 25, text: 'Crème solaire', cat: 'Équipement' },
+    { id: 26, text: 'Trousse de secours', cat: 'Équipement' },
+    { id: 27, text: 'Couverture de survie', cat: 'Équipement' },
+    { id: 28, text: 'Gourde filtrante', cat: 'Équipement' },
+    { id: 29, text: 'Camelback 2L minimum', cat: 'Équipement' },
+    { id: 30, text: 'Couverts (pas en plastique)', cat: 'Équipement' },
+    { id: 31, text: 'Couteau', cat: 'Équipement' },
+    { id: 32, text: 'Visa électronique (e-visa)', cat: 'Documents' },
+    { id: 33, text: 'Passeport valide 6 mois après retour', cat: 'Documents' },
+    { id: 34, text: 'Assurance voyage / rapatriement', cat: 'Documents' },
+    { id: 35, text: 'Copie passeport + billets (papier & numérique)', cat: 'Documents' },
+    { id: 36, text: 'Cash euros + dollars (change sur place)', cat: 'Documents' },
+  ],
+  checked: Object.fromEntries(TRIP.members.map(m => [m.name, []])),
+}
+
+function syncMapToItinerary(points, currentItinerary) {
+  const updated = { ...currentItinerary }
+  const dayGroups = {}
+  points.forEach(p => {
+    if (!dayGroups[p.day]) dayGroups[p.day] = []
+    dayGroups[p.day].push(p.name)
+  })
+  for (const [day, names] of Object.entries(dayGroups)) {
+    const dayNum = Number(day)
+    const dayDef = DAYS[dayNum - 1]
+    if (!dayDef) continue
+    const current = updated[dayNum] || emptyDay(dayDef)
+    updated[dayNum] = { ...current, location: names.join(' → ') }
+  }
+  return updated
 }
 
 // ─── Claude system prompt ──────────────────────────────────────────────────
@@ -62,8 +156,8 @@ VOYAGE :
 - Départ : 14 août 2026 à 08h20
 - 15 nuits sur place
 - J1 (30 juil) : arrivée à BICHKEK, découverte de la capitale, hôtel
-- Phase équestre (J2–J6, 31 juil–4 août) : randonnée ÉQUESTRE, nuits en YOURTE, agence CHOISIE : TATOSH (4j/3n, 200€/p)
-- Phase 4×4 (J7–J15, 5–13 août) : 4×4, EST du Kirghizistan, Issyk-Koul, Karakol, Djety-Oguz etc.
+- Phase équestre (J2–J5, 31 juil–3 août) : randonnée ÉQUESTRE, nuits en YOURTE, agence CHOISIE : TATOSH (4j/3n, 200€/p)
+- Phase 4×4 (J6–J15, 4–13 août) : 4×4, EST du Kirghizistan, Issyk-Koul, Karakol, Djety-Oguz etc.
 - J16 (14 août) : RETOUR, vol PC703 Bichkek 08h20 → Istanbul → Genève 16h20
 
 Réponds en français, de façon concrète et précise. Utilise des listes. Pense à la logistique pour 8 personnes.`
@@ -277,19 +371,30 @@ export default function App() {
   const [aiAnswer, setAiAnswer] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [mapPoints, setMapPoints] = useState(DEFAULT_MAP_POINTS)
+  const [editingPoint, setEditingPoint] = useState(null)
+  const [addingPoint, setAddingPoint] = useState(null) // { day, name }
+  const [checklist, setChecklist] = useState(DEFAULT_CHECKLIST)
+  const [checklistUser, setChecklistUser] = useState(TRIP.members[0].name)
+  const [newItemText, setNewItemText] = useState('')
+  const [newItemCat, setNewItemCat] = useState('Équipement')
   const flashTimer = useRef(null)
 
   // ── Load all data from Supabase on mount ──
   useEffect(() => {
     async function load() {
-      const [itin, ctcts, notes] = await Promise.all([
+      const [itin, ctcts, notes, pts, cl] = await Promise.all([
         kvGet('kg-itin'),
         kvGet('kg-contacts'),
         kvGet('kg-notes'),
+        kvGet('kg-mappoints'),
+        kvGet('kg-checklist'),
       ])
       if (itin) setItinerary(itin)
       if (ctcts) setContacts(ctcts)
       if (notes) setSharedNotes(notes)
+      if (pts) setMapPoints(sortPoints(pts))
+      if (cl) setChecklist(cl)
       setLoaded(true)
     }
     load()
@@ -298,11 +403,15 @@ export default function App() {
     const s1 = kvSubscribe('kg-itin', (val) => setItinerary(val))
     const s2 = kvSubscribe('kg-contacts', (val) => setContacts(val))
     const s3 = kvSubscribe('kg-notes', (val) => setSharedNotes(val))
+    const s4 = kvSubscribe('kg-mappoints', (val) => { if (val) setMapPoints(sortPoints(val)) })
+    const s5 = kvSubscribe('kg-checklist', (val) => { if (val) setChecklist(val) })
 
     return () => {
       s1.unsubscribe()
       s2.unsubscribe()
       s3.unsubscribe()
+      s4.unsubscribe()
+      s5.unsubscribe()
     }
   }, [])
 
@@ -423,15 +532,23 @@ export default function App() {
             <span className="bdg bdg-o">👥 {TRIP.group} personnes</span>
             <span className="bdg bdg-o">30 juil → 14 août</span>
             <span className="bdg bdg-o">15 nuits</span>
-            <span className="bdg bdg-h">🐎 Tatosh J2–J6</span>
-            <span className="bdg bdg-l">🚙 4×4 J7–J15</span>
+            <span className="bdg bdg-h">🐎 Tatosh J2–J5</span>
+            <span className="bdg bdg-l">🚙 4×4 J6–J15</span>
             {loaded && <span className="bdg bdg-g">✓ {filled}/16 jours planifiés</span>}
           </div>
+          {(() => {
+            const now = new Date()
+            const dep = new Date(2026, 6, 30)
+            const diff = Math.ceil((dep - now) / (1000 * 60 * 60 * 24))
+            if (diff > 0) return <div style={{ marginTop: '.5rem', fontSize: '.82rem', color: 'var(--amber)', fontFamily: "'Playfair Display',serif", letterSpacing: '.03em' }}>✈ J-{diff} avant le départ</div>
+            if (diff === 0) return <div style={{ marginTop: '.5rem', fontSize: '.82rem', color: 'var(--green)', fontFamily: "'Playfair Display',serif" }}>🎉 C'est le grand jour !</div>
+            return null
+          })()}
         </div>
 
         {/* Tabs */}
         <div className="tabs">
-          {[['itinerary', '📅 Itinéraire'], ['overview', '✈ Vols'], ['agencies', '🐎 Agences'], ['contacts', '👥 Groupe'], ['notes', '💬 Notes']].map(([id, l]) => (
+          {[['itinerary', '📅 Itinéraire'], ['overview', '✈ Vols'], ['agencies', '🐎 Agences'], ['map', '🗺 Carte'], ['contacts', '👥 Groupe'], ['matos', '✅ Checklist'], ['notes', '💬 Notes']].map(([id, l]) => (
             <button key={id} className={`tab ${tab === id ? 'on' : ''}`} onClick={() => setTab(id)}>{l}</button>
           ))}
         </div>
@@ -499,7 +616,7 @@ export default function App() {
                       Jour {selectedDay} — {day.dateStr}
                     </div>
                     <div className="de-sub">
-                      {day.phase === 'city' ? "Arrivée à Bichkek à 07h00 · Nuit à l'hôtel"
+                      {day.phase === 'city' ? "Arrivée à Bichkek à 07h00 · Nuit au Halo Hostel"
                         : day.phase === 'return' ? 'Retour · Vol PC703 08h20 → Istanbul → Genève 16h20'
                         : day.phase === 'horse' ? 'Phase équestre · Nuit en yourte'
                         : 'Phase 4×4 · Est du Kirghizistan'}
@@ -617,7 +734,7 @@ export default function App() {
               <div key={n} className="flight-card"><span className="f-num">{n}</span><span className="f-txt">{f} → {t} · {h}</span><span className="f-dir f-in">Retour</span></div>
             ))}
             <div className="stats">
-              {[['8', 'voyageurs'], ['15', 'nuits'], ['5', 'jours cheval'], ['20kg', 'bagages soute']].map(([n, l]) => (
+              {[['8', 'voyageurs'], ['15', 'nuits'], ['4', 'jours cheval'], ['20kg', 'bagages soute']].map(([n, l]) => (
                 <div key={l} className="stat"><div className="stat-n">{n}</div><div className="stat-l">{l}</div></div>
               ))}
             </div>
@@ -640,6 +757,14 @@ export default function App() {
               <a href={TRIP.drive} target="_blank" rel="noreferrer" className="qlink">
                 <span className="qlink-icon">📁</span>
                 <div><div className="qlink-label">Google Drive</div><div className="qlink-sub">Dossier Kirghizistan</div></div>
+              </a>
+              <a href={TRIP.miro} target="_blank" rel="noreferrer" className="qlink">
+                <span className="qlink-icon">🗺</span>
+                <div><div className="qlink-label">Miro</div><div className="qlink-sub">Tableau collaboratif (compte requis)</div></div>
+              </a>
+              <a href={TRIP.discord} target="_blank" rel="noreferrer" className="qlink">
+                <span className="qlink-icon">💬</span>
+                <div><div className="qlink-label">Discord</div><div className="qlink-sub">Serveur du groupe</div></div>
               </a>
             </div>
           </>
@@ -675,6 +800,160 @@ export default function App() {
           </>
         )}
 
+        {/* ══ MAP ══ */}
+        {tab === 'map' && (() => {
+          const savePoints = (pts) => {
+            const sorted = sortPoints(pts)
+            setMapPoints(sorted)
+            kvSet('kg-mappoints', sorted)
+            const updatedItin = syncMapToItinerary(sorted, itinerary)
+            setItinerary(updatedItin)
+            kvSet('kg-itin', updatedItin)
+          }
+          const handleDragEnd = (id) => (e) => {
+            const { lat, lng } = e.target.getLatLng()
+            savePoints(mapPoints.map(p => p.id === id ? { ...p, lat: Math.round(lat * 10000) / 10000, lng: Math.round(lng * 10000) / 10000 } : p))
+          }
+          const confirmAddPoint = () => {
+            if (!addingPoint?.name) return
+            const last = mapPoints[mapPoints.length - 1]
+            const nextId = Math.max(...mapPoints.map(p => p.id)) + 1
+            const dayDef = DAYS[addingPoint.day - 1]
+            const sameDayPts = mapPoints.filter(p => p.day === addingPoint.day)
+            const ref = sameDayPts.length > 0 ? sameDayPts[sameDayPts.length - 1] : last
+            savePoints([...mapPoints, { id: nextId, name: addingPoint.name, lat: ref.lat + 0.12, lng: ref.lng + 0.15, phase: dayDef?.phase || '4x4', day: addingPoint.day, desc: '' }])
+            setAddingPoint(null)
+          }
+          const updatePoint = (id, field, value) => {
+            if (field === 'day') {
+              const dayNum = Number(value)
+              const dayDef = DAYS[dayNum - 1]
+              savePoints(mapPoints.map(p => p.id === id ? { ...p, day: dayNum, phase: dayDef?.phase || p.phase } : p))
+            } else {
+              savePoints(mapPoints.map(p => p.id === id ? { ...p, [field]: value } : p))
+            }
+          }
+          const deletePoint = (id) => {
+            if (mapPoints.length <= 1) return
+            savePoints(mapPoints.filter(p => p.id !== id))
+          }
+          const inputStyle = { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.4rem .6rem', color: 'var(--bone)', fontSize: '.8rem' }
+          return (
+          <>
+            <div className="slbl">🗺 Carte de l'itinéraire</div>
+            <p style={{ fontSize: '.74rem', color: 'var(--muted)', marginBottom: '.8rem' }}>Déplacez les marqueurs · Cliquez pour éditer · Les lieux se synchronisent avec l'itinéraire</p>
+            <div style={{ height: '500px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border)', marginBottom: '1rem' }}>
+              <MapContainer center={[42.0, 75.3]} zoom={8} style={{ height: '100%', width: '100%' }} scrollWheelZoom={true}>
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                {mapPoints.map((p) => {
+                  const label = getPointLabel(p, mapPoints)
+                  const isLong = label.length > 2
+                  const size = isLong ? 26 : 18
+                  return (
+                  <Marker key={p.id} position={[p.lat, p.lng]} draggable={true}
+                    eventHandlers={{ dragend: handleDragEnd(p.id) }}
+                    icon={L.divIcon({ className: '', html: `<div style="min-width:${size}px;height:${size}px;border-radius:${isLong ? '10px' : '50%'};padding:0 ${isLong ? '4px' : '0'};background:${PHASE_COLORS[p.phase]};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:#fff;font-size:${isLong ? '8px' : '9px'};font-weight:700;white-space:nowrap">${label}</div>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2] })}>
+                    <Popup>
+                      <div style={{ minWidth: '180px' }}>
+                        <div style={{ fontSize: '.7rem', color: '#999', marginBottom: '2px' }}>{label}</div>
+                        <div style={{ fontFamily: "'Playfair Display',serif", fontWeight: 600, marginBottom: '4px', fontSize: '.95rem' }}>{p.name}</div>
+                        {p.desc && <div style={{ fontSize: '.78rem', color: '#666', marginBottom: '6px' }}>{p.desc}</div>}
+                        <div style={{ fontSize: '.7rem', color: '#999', marginBottom: '8px' }}>{p.lat}, {p.lng}</div>
+                        <button onClick={() => setEditingPoint(p.id)} style={{ fontSize: '.72rem', padding: '3px 8px', background: '#f0f0f0', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer', marginRight: '4px' }}>Modifier</button>
+                        <button onClick={() => deletePoint(p.id)} style={{ fontSize: '.72rem', padding: '3px 8px', background: '#fee', border: '1px solid #ecc', borderRadius: '3px', cursor: 'pointer', color: '#c33' }}>Supprimer</button>
+                      </div>
+                    </Popup>
+                  </Marker>
+                  )
+                })}
+                <Polyline positions={mapPoints.map(p => [p.lat, p.lng])} color="#c4956a" weight={2.5} opacity={0.7} dashArray="8 5" />
+              </MapContainer>
+            </div>
+
+            {/* Edit point form */}
+            {editingPoint && (() => {
+              const p = mapPoints.find(pt => pt.id === editingPoint)
+              if (!p) return null
+              return (
+                <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderLeft: '3px solid var(--amber)', borderRadius: '3px', padding: '1rem', marginBottom: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
+                    <div style={{ fontSize: '.82rem', fontFamily: "'Playfair Display',serif", color: 'var(--bone)' }}>Modifier — {getPointLabel(p, mapPoints)}</div>
+                    <button onClick={() => setEditingPoint(null)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.9rem' }}>✕</button>
+                  </div>
+                  <div style={{ display: 'grid', gap: '.5rem' }}>
+                    <input value={p.name} onChange={e => updatePoint(p.id, 'name', e.target.value)} placeholder="Nom du lieu" style={inputStyle} />
+                    <input value={p.desc} onChange={e => updatePoint(p.id, 'desc', e.target.value)} placeholder="Description (optionnel)" style={inputStyle} />
+                    <div style={{ display: 'flex', gap: '.5rem' }}>
+                      <select value={p.day} onChange={e => updatePoint(p.id, 'day', e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+                        {DAYS.map(d => <option key={d.num} value={d.num}>J{d.num} — {d.dateStr}</option>)}
+                      </select>
+                      <div style={{ fontSize: '.72rem', color: 'var(--muted)', alignSelf: 'center', whiteSpace: 'nowrap' }}>{p.lat}, {p.lng}</div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Add point form */}
+            {addingPoint ? (
+              <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderLeft: '3px solid #5b9bd5', borderRadius: '3px', padding: '1rem', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
+                  <div style={{ fontSize: '.82rem', fontFamily: "'Playfair Display',serif", color: 'var(--bone)' }}>Nouvelle étape</div>
+                  <button onClick={() => setAddingPoint(null)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.9rem' }}>✕</button>
+                </div>
+                <div style={{ display: 'grid', gap: '.5rem' }}>
+                  <select value={addingPoint.day} onChange={e => setAddingPoint(a => ({ ...a, day: Number(e.target.value) }))} style={inputStyle}>
+                    {DAYS.map(d => <option key={d.num} value={d.num}>J{d.num} — {d.dateStr} ({d.phase === 'city' ? 'Ville' : d.phase === 'horse' ? 'Cheval' : d.phase === '4x4' ? '4×4' : 'Retour'})</option>)}
+                  </select>
+                  <input value={addingPoint.name} onChange={e => setAddingPoint(a => ({ ...a, name: e.target.value }))} placeholder="Nom du lieu (ex: Karakol, Issyk-Köl…)" style={inputStyle} autoFocus />
+                  <button onClick={confirmAddPoint} disabled={!addingPoint.name} style={{ fontSize: '.78rem', padding: '.4rem .8rem', background: addingPoint.name ? 'rgba(91,155,213,.15)' : 'var(--bg)', border: '1px solid rgba(91,155,213,.3)', borderRadius: '3px', color: addingPoint.name ? '#5b9bd5' : 'var(--muted)', cursor: addingPoint.name ? 'pointer' : 'default' }}>Ajouter sur la carte</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '.5rem', marginBottom: '.5rem' }}>
+                <button onClick={() => setAddingPoint({ day: Math.max(...mapPoints.map(p => p.day)) + 1 > 16 ? 16 : Math.max(...mapPoints.map(p => p.day)) + 1, name: '' })} style={{ fontSize: '.78rem', padding: '.4rem .8rem', background: 'rgba(91,155,213,.15)', border: '1px solid rgba(91,155,213,.3)', borderRadius: '3px', color: '#5b9bd5', cursor: 'pointer' }}>+ Ajouter une étape</button>
+                <div style={{ display: 'flex', gap: '1rem', fontSize: '.76rem', color: 'var(--muted)' }}>
+                  {[['city', 'Capitale'], ['horse', 'Cheval'], ['4x4', '4×4']].map(([phase, label]) => (
+                    <div key={phase} style={{ display: 'flex', alignItems: 'center', gap: '.3rem' }}>
+                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: PHASE_COLORS[phase], display: 'inline-block' }}></span>
+                      {label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Point list grouped by day */}
+            <div style={{ marginTop: '.5rem' }}>
+              {(() => {
+                let lastDay = null
+                return mapPoints.map((p) => {
+                  const label = getPointLabel(p, mapPoints)
+                  const showDaySep = p.day !== lastDay
+                  lastDay = p.day
+                  const dayDef = DAYS[p.day - 1]
+                  return (
+                    <div key={p.id}>
+                      {showDaySep && <div style={{ fontSize: '.68rem', color: 'var(--muted)', padding: '.35rem .6rem .1rem', marginTop: '.3rem', borderTop: '1px solid var(--border)', fontFamily: "'Playfair Display',serif", letterSpacing: '.03em' }}>Jour {p.day} — {dayDef?.dateStr || ''}</div>}
+                      <div onClick={() => setEditingPoint(p.id)} style={{ display: 'flex', alignItems: 'center', gap: '.6rem', padding: '.4rem .6rem', background: editingPoint === p.id ? 'rgba(196,149,106,.1)' : 'transparent', borderRadius: '3px', cursor: 'pointer' }}>
+                        <span style={{ minWidth: '28px', height: '20px', borderRadius: '10px', padding: '0 4px', background: PHASE_COLORS[p.phase], display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '.6rem', fontWeight: 700, flexShrink: 0 }}>{label}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '.8rem', color: 'var(--bone)', fontWeight: 500 }}>{p.name}</div>
+                          {p.desc && <div style={{ fontSize: '.7rem', color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.desc}</div>}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              })()}
+            </div>
+          </>
+          )
+        })()}
+
         {/* ══ CONTACTS ══ */}
         {tab === 'contacts' && (
           <>
@@ -686,6 +965,14 @@ export default function App() {
               <a href={TRIP.drive} target="_blank" rel="noreferrer" className="qlink">
                 <span className="qlink-icon">📁</span>
                 <div><div className="qlink-label">Google Drive</div><div className="qlink-sub">Dossier Kirghizistan</div></div>
+              </a>
+              <a href={TRIP.miro} target="_blank" rel="noreferrer" className="qlink">
+                <span className="qlink-icon">🗺</span>
+                <div><div className="qlink-label">Miro</div><div className="qlink-sub">Tableau collaboratif (compte requis)</div></div>
+              </a>
+              <a href={TRIP.discord} target="_blank" rel="noreferrer" className="qlink">
+                <span className="qlink-icon">💬</span>
+                <div><div className="qlink-label">Discord</div><div className="qlink-sub">Serveur du groupe</div></div>
               </a>
             </div>
             <div className="slbl">👥 Les 8 membres — cliquer pour éditer</div>
@@ -727,6 +1014,100 @@ export default function App() {
             </div>
           </>
         )}
+
+        {/* ══ CHECKLIST ══ */}
+        {tab === 'matos' && (() => {
+          const saveCheck = (data) => { setChecklist(data); kvSet('kg-checklist', data) }
+          const toggleItem = (itemId) => {
+            const arr = checklist.checked[checklistUser] || []
+            const next = arr.includes(itemId) ? arr.filter(id => id !== itemId) : [...arr, itemId]
+            saveCheck({ ...checklist, checked: { ...checklist.checked, [checklistUser]: next } })
+          }
+          const addItem = () => {
+            if (!newItemText.trim()) return
+            const nextId = Math.max(0, ...checklist.items.map(i => i.id)) + 1
+            saveCheck({ ...checklist, items: [...checklist.items, { id: nextId, text: newItemText.trim(), cat: newItemCat }] })
+            setNewItemText('')
+          }
+          const removeItem = (itemId) => {
+            const newChecked = {}
+            for (const [name, arr] of Object.entries(checklist.checked)) {
+              newChecked[name] = arr.filter(id => id !== itemId)
+            }
+            saveCheck({ items: checklist.items.filter(i => i.id !== itemId), checked: newChecked })
+          }
+          const userChecked = checklist.checked[checklistUser] || []
+          const totalItems = checklist.items.length
+          const checkedCount = userChecked.length
+          const pct = totalItems > 0 ? Math.round((checkedCount / totalItems) * 100) : 0
+          const inputStyle = { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.4rem .6rem', color: 'var(--bone)', fontSize: '.8rem' }
+
+          return (
+          <>
+            {/* Header */}
+            <div className="slbl">✅ Checklist — Matos & Logistique</div>
+            <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.8rem 1rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '.8rem', flexWrap: 'wrap', marginBottom: '.6rem' }}>
+                <label style={{ fontSize: '.76rem', color: 'var(--muted)' }}>Qui es-tu ?</label>
+                <select value={checklistUser} onChange={e => setChecklistUser(e.target.value)} style={{ ...inputStyle, flex: 1, maxWidth: '220px' }}>
+                  {TRIP.members.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+                </select>
+                <div style={{ fontSize: '.78rem', color: 'var(--bone)', fontFamily: "'Playfair Display',serif" }}>{checkedCount}/{totalItems}</div>
+              </div>
+              <div style={{ height: '6px', background: 'var(--bg)', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? 'var(--green)' : 'var(--amber)', borderRadius: '3px', transition: 'width .3s' }} />
+              </div>
+            </div>
+
+            {/* Categories */}
+            {CHECKLIST_CATS.map(cat => {
+              const catItems = checklist.items.filter(i => i.cat === cat.id)
+              if (catItems.length === 0) return null
+              const catChecked = catItems.filter(i => userChecked.includes(i.id)).length
+              return (
+                <div key={cat.id} style={{ marginBottom: '1rem' }}>
+                  <div style={{ fontSize: '.8rem', color: 'var(--bone)', fontFamily: "'Playfair Display',serif", marginBottom: '.4rem', display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+                    <span>{cat.icon}</span> {cat.id}
+                    <span style={{ fontSize: '.68rem', color: 'var(--muted)', fontFamily: 'system-ui' }}>({catChecked}/{catItems.length})</span>
+                  </div>
+                  {catItems.map(item => {
+                    const isChecked = userChecked.includes(item.id)
+                    const othersWhoChecked = TRIP.members.filter(m => m.name !== checklistUser && (checklist.checked[m.name] || []).includes(item.id))
+                    return (
+                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.35rem .4rem', borderBottom: '1px solid var(--border)' }}>
+                        <input type="checkbox" checked={isChecked} onChange={() => toggleItem(item.id)} style={{ accentColor: 'var(--amber)', cursor: 'pointer', flexShrink: 0 }} />
+                        <div style={{ flex: 1, fontSize: '.8rem', color: isChecked ? 'var(--muted)' : 'var(--bone)', textDecoration: isChecked ? 'line-through' : 'none' }}>{item.text}</div>
+                        <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                          {othersWhoChecked.map(m => (
+                            <span key={m.name} title={m.name} style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(196,149,106,.2)', color: 'var(--amber)', fontSize: '.55rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {m.name.split(' ').map(w => w[0]).join('')}
+                            </span>
+                          ))}
+                        </div>
+                        <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.7rem', padding: '2px 4px', opacity: .5 }} title="Supprimer pour tout le monde">✕</button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+
+            {/* Add item */}
+            <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', marginTop: '.5rem', marginBottom: '1rem' }}>
+              <input value={newItemText} onChange={e => setNewItemText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="Ajouter un item…" style={{ ...inputStyle, flex: 1 }} />
+              <select value={newItemCat} onChange={e => setNewItemCat(e.target.value)} style={{ ...inputStyle, width: '130px' }}>
+                {CHECKLIST_CATS.map(c => <option key={c.id} value={c.id}>{c.icon} {c.id}</option>)}
+              </select>
+              <button onClick={addItem} disabled={!newItemText.trim()} style={{ padding: '.4rem .7rem', background: newItemText.trim() ? 'rgba(196,149,106,.15)' : 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: newItemText.trim() ? 'var(--amber)' : 'var(--muted)', cursor: newItemText.trim() ? 'pointer' : 'default', fontSize: '.82rem' }}>+</button>
+            </div>
+
+            {/* Discord link */}
+            <a href={TRIP.discord} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', padding: '.4rem .8rem', background: 'rgba(114,137,218,.1)', border: '1px solid rgba(114,137,218,.2)', borderRadius: '3px', color: '#7289da', fontSize: '.74rem', textDecoration: 'none' }}>
+              💬 Voir aussi Discord · #matos
+            </a>
+          </>
+          )
+        })()}
 
         {/* ══ NOTES ══ */}
         {tab === 'notes' && (
