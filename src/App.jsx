@@ -190,10 +190,13 @@ const CSS = `
   .bdg-l{background:var(--laked);color:var(--lakel);border:1px solid rgba(45,95,138,.28)}
   .bdg-g{background:rgba(76,175,122,.12);color:var(--green);border:1px solid rgba(76,175,122,.25)}
 
-  .tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:1.8rem;gap:0;overflow-x:auto}
+  .tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:1.8rem;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
   .tab{padding:.6rem 1.1rem;font-size:.79rem;font-weight:500;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:'DM Sans',sans-serif;white-space:nowrap}
   .tab:hover{color:var(--bone)}
   .tab.on{color:var(--amber);border-bottom-color:var(--amber)}
+  @media(max-width:500px){
+    .tab{padding:.5rem .65rem;font-size:.7rem;letter-spacing:.04em}
+  }
 
   .slbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.13em;color:var(--amber);margin-bottom:.7rem}
 
@@ -217,6 +220,16 @@ const CSS = `
   .di-loc{font-size:.67rem;color:var(--bone);margin-top:.12rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
   .phase-sep{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:.5rem .2rem .3rem;display:flex;align-items:center;gap:.4rem}
   .phase-sep::after{content:'';flex:1;height:1px;background:var(--border)}
+  @media(max-width:620px){
+    .day-list{position:static;flex-direction:row;overflow-x:auto;overflow-y:hidden;max-height:none;gap:.35rem;padding-bottom:.5rem;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
+    .day-item{min-width:70px;flex-shrink:0;border-left:none;border-top:3px solid transparent;padding:.4rem .5rem;scroll-snap-align:start}
+    .day-item.horse{border-left-color:transparent;border-top-color:var(--horse)}
+    .day-item.x4{border-left-color:transparent;border-top-color:var(--lake)}
+    .day-item.cap{border-left-color:transparent;border-top-color:var(--city)}
+    .di-loc{max-width:60px;font-size:.58rem}
+    .phase-sep{writing-mode:horizontal-tb;padding:.2rem .4rem;min-width:max-content;flex-shrink:0;align-self:center}
+    .phase-sep::after{display:none}
+  }
 
   /* Day editor */
   .day-editor{background:var(--bg2);border:1px solid var(--border);border-radius:4px;overflow:hidden}
@@ -224,6 +237,14 @@ const CSS = `
   .de-title{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--bone)}
   .de-sub{font-size:.73rem;color:var(--muted);margin-top:.1rem}
   .de-body{padding:1.1rem 1.2rem;display:flex;flex-direction:column;gap:.85rem}
+  @media(max-width:500px){
+    .de-header{padding:.75rem .8rem}
+    .de-title{font-size:.95rem}
+    .de-sub{font-size:.66rem}
+    .de-body{padding:.8rem}
+    .de-footer{padding:.6rem .8rem}
+    .ai-toggle{font-size:.7rem;padding:.4rem .6rem}
+  }
   .field-row{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
   @media(max-width:500px){.field-row{grid-template-columns:1fr}}
   .field{display:flex;flex-direction:column;gap:.3rem}
@@ -251,11 +272,15 @@ const CSS = `
   .ai-qbtn{padding:.28rem .65rem;border:1px solid rgba(212,146,28,.22);border-radius:2px;background:transparent;color:var(--amberl);font-size:.7rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
   .ai-qbtn:hover{background:var(--amberd)}
   .ai-input-row{display:flex;gap:.4rem}
-  .ai-input{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:3px;padding:.5rem .75rem;color:var(--bone);font-family:'DM Sans',sans-serif;font-size:.82rem;outline:none}
+  .ai-input{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:3px;padding:.5rem .75rem;color:var(--bone);font-family:'DM Sans',sans-serif;font-size:.82rem;outline:none;min-width:0}
   .ai-input:focus{border-color:var(--amber)}
   .ai-input::placeholder{color:var(--muted)}
   .ai-send{padding:.5rem .85rem;background:var(--amber);color:var(--bg);border:none;border-radius:3px;font-size:.8rem;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif}
   .ai-send:disabled{opacity:.5;cursor:not-allowed}
+  @media(max-width:500px){
+    .ai-panel{padding:.75rem .8rem}
+    .ai-qbtn{font-size:.65rem;padding:.22rem .5rem}
+  }
   .ai-answer{margin-top:.75rem;background:rgba(255,255,255,.04);border:1px solid rgba(212,146,28,.16);border-radius:3px;padding:.8rem 1rem;font-size:.82rem;line-height:1.65;color:var(--bone);white-space:pre-wrap}
   .typing{display:flex;gap:4px;padding:.3rem 0}
   .typing span{width:6px;height:6px;border-radius:50%;background:var(--amber);animation:bounce 1.2s ease-in-out infinite}
@@ -267,12 +292,22 @@ const CSS = `
   .f-num{font-family:'Playfair Display',serif;color:var(--amber);font-size:.9rem;min-width:50px}
   .f-txt{font-size:.82rem;color:var(--bone)}
   .f-dir{font-size:.66rem;padding:.16rem .5rem;border-radius:2px;text-transform:uppercase;letter-spacing:.07em;font-weight:500}
+  @media(max-width:500px){
+    .flight-card{padding:.6rem .75rem;gap:.5rem}
+    .f-num{min-width:auto;font-size:.82rem}
+    .f-txt{font-size:.75rem}
+  }
   .f-out{background:var(--amberd);color:var(--amberl)}
   .f-in{background:rgba(192,57,27,.1);color:#e07050}
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-radius:3px;overflow:hidden;margin:1.4rem 0}
   .stat{background:var(--bg2);padding:.9rem;text-align:center}
   .stat-n{font-family:'Playfair Display',serif;font-size:1.7rem;color:var(--amber);font-weight:700;line-height:1}
   .stat-l{font-size:.65rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-top:.28rem}
+  @media(max-width:500px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .stat{padding:.7rem .5rem}
+    .stat-n{font-size:1.3rem}
+  }
 
   /* Progress */
   .progress-row{display:flex;gap:.5rem;margin:1rem 0;flex-wrap:wrap}
@@ -290,6 +325,9 @@ const CSS = `
 
   /* Contacts */
   .contacts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.5rem;margin-top:.8rem}
+  @media(max-width:500px){
+    .contacts-grid{grid-template-columns:1fr}
+  }
   .contact-card{background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:.9rem 1rem;display:grid;grid-template-columns:1fr auto;gap:.3rem .8rem;align-items:start;cursor:pointer;transition:border-color .15s}
   .contact-card:hover{border-color:var(--amber)}
   .contact-name{font-family:'Playfair Display',serif;font-size:.98rem;color:var(--bone);grid-column:1}
@@ -317,6 +355,12 @@ const CSS = `
   .ni-name::placeholder,.ni-text::placeholder{color:var(--muted)}
   .ni-btn{padding:.48rem .85rem;background:var(--amber);color:var(--bg);border:none;border-radius:3px;font-size:.8rem;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif}
   .ni-btn:disabled{opacity:.4;cursor:not-allowed}
+  @media(max-width:500px){
+    .np-input{flex-wrap:wrap}
+    .ni-name{width:100%}
+    .ni-text{width:100%;min-width:0}
+    .ni-btn{width:100%}
+  }
 
   /* Quick links */
   .quicklinks{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1.2rem}
@@ -325,12 +369,57 @@ const CSS = `
   .qlink-icon{font-size:1.2rem}
   .qlink-label{font-size:.82rem;color:var(--bone);font-weight:500}
   .qlink-sub{font-size:.7rem;color:var(--muted)}
+  @media(max-width:500px){
+    .quicklinks{grid-template-columns:1fr}
+    .qlink{padding:.6rem .8rem}
+  }
+
+  /* Countdown */
+  .countdown{margin-top:.7rem;background:var(--amberd);border:1px solid rgba(212,146,28,.2);border-radius:4px;padding:.6rem .8rem;display:inline-block}
+  .cd-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--amberl);margin-bottom:.4rem}
+  .cd-boxes{display:flex;align-items:center;gap:.3rem}
+  .cd-box{display:flex;flex-direction:column;align-items:center;min-width:38px}
+  .cd-num{font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:700;color:var(--amber);line-height:1;font-variant-numeric:tabular-nums}
+  .cd-unit{font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:.15rem}
+  .cd-sep{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--muted);font-weight:700;align-self:flex-start;margin-top:.1rem}
+  @media(max-width:500px){
+    .countdown{display:block}
+    .cd-num{font-size:1.15rem}
+    .cd-box{min-width:32px}
+  }
+
+  /* Header bottom row: countdown + quick links */
+  .hdr-bottom{display:flex;align-items:stretch;gap:.6rem;margin-top:.7rem;flex-wrap:wrap}
+  .hdr-links{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;flex:1;min-width:200px}
+  .hdr-link{background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:.5rem .7rem;text-decoration:none;display:flex;align-items:center;gap:.5rem;transition:border-color .15s}
+  .hdr-link:hover{border-color:var(--amber)}
+  .hl-icon{font-size:1rem;flex-shrink:0}
+  .hl-label{font-size:.78rem;color:var(--bone);font-weight:500;line-height:1.2}
+  .hl-sub{font-size:.64rem;color:var(--muted);line-height:1.2}
+  @media(max-width:620px){
+    .hdr-bottom{flex-direction:column}
+    .hdr-links{min-width:0}
+  }
+  @media(max-width:500px){
+    .hdr-link{padding:.4rem .55rem;gap:.4rem}
+    .hl-label{font-size:.72rem}
+    .hl-sub{font-size:.58rem}
+    .hl-icon{font-size:.85rem}
+  }
 
   .empty-state{text-align:center;padding:1.5rem;color:var(--muted);font-size:.8rem}
   .footer{text-align:center;padding-top:3rem;font-size:.64rem;color:rgba(92,122,104,.4);letter-spacing:.07em;text-transform:uppercase}
 
   @keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  /* Global mobile fixes */
+  @media(max-width:500px){
+    .wrap{padding:0 .6rem 3rem}
+    .hdr{padding:1.2rem 0 1rem}
+    .badges{gap:.3rem}
+    .bdg{font-size:.6rem;padding:.2rem .45rem}
+  }
 `
 
 // ─── Inline contact editor ─────────────────────────────────────────────────
@@ -379,6 +468,26 @@ export default function App() {
   const [newItemText, setNewItemText] = useState('')
   const [newItemCat, setNewItemCat] = useState('Équipement')
   const flashTimer = useRef(null)
+  const dayEditorRef = useRef(null)
+  const [countdown, setCountdown] = useState(null)
+
+  // ── Live countdown to departure ──
+  useEffect(() => {
+    const departure = new Date(2026, 6, 29, 17, 20, 0) // 29 juil 2026 17h20 vol PC956
+    function update() {
+      const now = new Date()
+      const diff = departure - now
+      if (diff <= 0) { setCountdown(null); return }
+      const d = Math.floor(diff / 86400000)
+      const h = Math.floor((diff % 86400000) / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      setCountdown({ d, h, m, s, total: diff })
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [])
 
   // ── Load all data from Supabase on mount ──
   useEffect(() => {
@@ -442,6 +551,9 @@ export default function App() {
     setAiOpen(false)
     setAiAnswer('')
     setAiInput('')
+    if (window.innerWidth <= 620) {
+      setTimeout(() => dayEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+    }
   }
 
   // ── Save contact ──
@@ -536,14 +648,30 @@ export default function App() {
             <span className="bdg bdg-l">🚙 4×4 J6–J15</span>
             {loaded && <span className="bdg bdg-g">✓ {filled}/16 jours planifiés</span>}
           </div>
-          {(() => {
-            const now = new Date()
-            const dep = new Date(2026, 6, 30)
-            const diff = Math.ceil((dep - now) / (1000 * 60 * 60 * 24))
-            if (diff > 0) return <div style={{ marginTop: '.5rem', fontSize: '.82rem', color: 'var(--amber)', fontFamily: "'Playfair Display',serif", letterSpacing: '.03em' }}>✈ J-{diff} avant le départ</div>
-            if (diff === 0) return <div style={{ marginTop: '.5rem', fontSize: '.82rem', color: 'var(--green)', fontFamily: "'Playfair Display',serif" }}>🎉 C'est le grand jour !</div>
-            return null
-          })()}
+          <div className="hdr-bottom">
+            {countdown ? (
+              <div className="countdown">
+                <div className="cd-label">✈ Décollage vol PC956 dans</div>
+                <div className="cd-boxes">
+                  <div className="cd-box"><span className="cd-num">{countdown.d}</span><span className="cd-unit">jours</span></div>
+                  <span className="cd-sep">:</span>
+                  <div className="cd-box"><span className="cd-num">{String(countdown.h).padStart(2, '0')}</span><span className="cd-unit">heures</span></div>
+                  <span className="cd-sep">:</span>
+                  <div className="cd-box"><span className="cd-num">{String(countdown.m).padStart(2, '0')}</span><span className="cd-unit">min</span></div>
+                  <span className="cd-sep">:</span>
+                  <div className="cd-box"><span className="cd-num">{String(countdown.s).padStart(2, '0')}</span><span className="cd-unit">sec</span></div>
+                </div>
+              </div>
+            ) : countdown === null && new Date() >= new Date(2026, 6, 29, 17, 20, 0) ? (
+              <div style={{ fontSize: '.82rem', color: 'var(--green)', fontFamily: "'Playfair Display',serif" }}>🎉 C'est parti — bon voyage !</div>
+            ) : null}
+            <div className="hdr-links">
+              <a href={TRIP.tricount} target="_blank" rel="noreferrer" className="hdr-link"><span className="hl-icon">💰</span><div><div className="hl-label">Tricount</div><div className="hl-sub">Dépenses</div></div></a>
+              <a href={TRIP.drive} target="_blank" rel="noreferrer" className="hdr-link"><span className="hl-icon">📁</span><div><div className="hl-label">Drive</div><div className="hl-sub">Documents</div></div></a>
+              <a href={TRIP.miro} target="_blank" rel="noreferrer" className="hdr-link"><span className="hl-icon">🗺</span><div><div className="hl-label">Miro</div><div className="hl-sub">Tableau</div></div></a>
+              <a href={TRIP.discord} target="_blank" rel="noreferrer" className="hdr-link"><span className="hl-icon">💬</span><div><div className="hl-label">Discord</div><div className="hl-sub">Groupe</div></div></a>
+            </div>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -605,7 +733,7 @@ export default function App() {
             </div>
 
             {/* Day editor */}
-            <div>
+            <div ref={dayEditorRef}>
               <div className="day-editor">
                 <div className="de-header">
                   <div>
@@ -740,7 +868,7 @@ export default function App() {
             </div>
             <div style={{ marginBottom: '1.5rem' }}>
               <div className="slbl">👥 Le groupe</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: '.4rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(180px, 100%),1fr))', gap: '.4rem' }}>
                 {TRIP.members.map((m, i) => (
                   <div key={m.name} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.55rem .8rem', fontSize: '.82rem', display: 'flex', alignItems: 'center', gap: '.5rem' }}>
                     <span style={{ color: 'var(--amber)', fontFamily: "'Playfair Display',serif", fontSize: '.9rem' }}>{i + 1}</span>
@@ -748,24 +876,6 @@ export default function App() {
                   </div>
                 ))}
               </div>
-            </div>
-            <div className="quicklinks">
-              <a href={TRIP.tricount} target="_blank" rel="noreferrer" className="qlink">
-                <span className="qlink-icon">💰</span>
-                <div><div className="qlink-label">Tricount</div><div className="qlink-sub">Partage des dépenses</div></div>
-              </a>
-              <a href={TRIP.drive} target="_blank" rel="noreferrer" className="qlink">
-                <span className="qlink-icon">📁</span>
-                <div><div className="qlink-label">Google Drive</div><div className="qlink-sub">Dossier Kirghizistan</div></div>
-              </a>
-              <a href={TRIP.miro} target="_blank" rel="noreferrer" className="qlink">
-                <span className="qlink-icon">🗺</span>
-                <div><div className="qlink-label">Miro</div><div className="qlink-sub">Tableau collaboratif (compte requis)</div></div>
-              </a>
-              <a href={TRIP.discord} target="_blank" rel="noreferrer" className="qlink">
-                <span className="qlink-icon">💬</span>
-                <div><div className="qlink-label">Discord</div><div className="qlink-sub">Serveur du groupe</div></div>
-              </a>
             </div>
           </>
         )}
@@ -844,7 +954,7 @@ export default function App() {
           <>
             <div className="slbl">🗺 Carte de l'itinéraire</div>
             <p style={{ fontSize: '.74rem', color: 'var(--muted)', marginBottom: '.8rem' }}>Déplacez les marqueurs · Cliquez pour éditer · Les lieux se synchronisent avec l'itinéraire</p>
-            <div style={{ height: '500px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border)', marginBottom: '1rem' }}>
+            <div style={{ height: 'min(500px, 60vh)', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border)', marginBottom: '1rem' }}>
               <MapContainer center={[42.0, 75.3]} zoom={8} style={{ height: '100%', width: '100%' }} scrollWheelZoom={true}>
                 <TileLayer
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -888,8 +998,8 @@ export default function App() {
                   <div style={{ display: 'grid', gap: '.5rem' }}>
                     <input value={p.name} onChange={e => updatePoint(p.id, 'name', e.target.value)} placeholder="Nom du lieu" style={inputStyle} />
                     <input value={p.desc} onChange={e => updatePoint(p.id, 'desc', e.target.value)} placeholder="Description (optionnel)" style={inputStyle} />
-                    <div style={{ display: 'flex', gap: '.5rem' }}>
-                      <select value={p.day} onChange={e => updatePoint(p.id, 'day', e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+                    <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                      <select value={p.day} onChange={e => updatePoint(p.id, 'day', e.target.value)} style={{ ...inputStyle, flex: '1 1 150px', minWidth: 0 }}>
                         {DAYS.map(d => <option key={d.num} value={d.num}>J{d.num} — {d.dateStr}</option>)}
                       </select>
                       <div style={{ fontSize: '.72rem', color: 'var(--muted)', alignSelf: 'center', whiteSpace: 'nowrap' }}>{p.lat}, {p.lng}</div>
@@ -917,10 +1027,10 @@ export default function App() {
             ) : (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '.5rem', marginBottom: '.5rem' }}>
                 <button onClick={() => setAddingPoint({ day: Math.max(...mapPoints.map(p => p.day)) + 1 > 16 ? 16 : Math.max(...mapPoints.map(p => p.day)) + 1, name: '' })} style={{ fontSize: '.78rem', padding: '.4rem .8rem', background: 'rgba(91,155,213,.15)', border: '1px solid rgba(91,155,213,.3)', borderRadius: '3px', color: '#5b9bd5', cursor: 'pointer' }}>+ Ajouter une étape</button>
-                <div style={{ display: 'flex', gap: '1rem', fontSize: '.76rem', color: 'var(--muted)' }}>
+                <div style={{ display: 'flex', gap: '.6rem', fontSize: '.72rem', color: 'var(--muted)', flexWrap: 'wrap' }}>
                   {[['city', 'Capitale'], ['horse', 'Cheval'], ['4x4', '4×4']].map(([phase, label]) => (
                     <div key={phase} style={{ display: 'flex', alignItems: 'center', gap: '.3rem' }}>
-                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: PHASE_COLORS[phase], display: 'inline-block' }}></span>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: PHASE_COLORS[phase], display: 'inline-block' }}></span>
                       {label}
                     </div>
                   ))}
@@ -959,24 +1069,6 @@ export default function App() {
         {/* ══ CONTACTS ══ */}
         {tab === 'contacts' && (
           <>
-            <div className="quicklinks">
-              <a href={TRIP.tricount} target="_blank" rel="noreferrer" className="qlink">
-                <span className="qlink-icon">💰</span>
-                <div><div className="qlink-label">Tricount</div><div className="qlink-sub">Partage des dépenses</div></div>
-              </a>
-              <a href={TRIP.drive} target="_blank" rel="noreferrer" className="qlink">
-                <span className="qlink-icon">📁</span>
-                <div><div className="qlink-label">Google Drive</div><div className="qlink-sub">Dossier Kirghizistan</div></div>
-              </a>
-              <a href={TRIP.miro} target="_blank" rel="noreferrer" className="qlink">
-                <span className="qlink-icon">🗺</span>
-                <div><div className="qlink-label">Miro</div><div className="qlink-sub">Tableau collaboratif (compte requis)</div></div>
-              </a>
-              <a href={TRIP.discord} target="_blank" rel="noreferrer" className="qlink">
-                <span className="qlink-icon">💬</span>
-                <div><div className="qlink-label">Discord</div><div className="qlink-sub">Serveur du groupe</div></div>
-              </a>
-            </div>
             <div className="slbl">👥 Les 8 membres — cliquer pour éditer</div>
             <p style={{ fontSize: '.74rem', color: 'var(--muted)', marginBottom: '.8rem' }}>Format international (+33…) · Sauvegardé en temps réel</p>
             <div className="contacts-grid">
@@ -1007,10 +1099,10 @@ export default function App() {
                 { label: 'Ambassade de France – Bichkek', val: '+996 312 97 31 00', icon: '🇫🇷' },
                 { label: 'Aéroport Manas', val: '+996 312 69 30 00', icon: '✈' },
               ].map((c, i) => (
-                <div key={i} style={{ display: 'flex', gap: '.6rem', padding: '.4rem 0', borderBottom: '1px solid var(--border)', fontSize: '.82rem', alignItems: 'center' }}>
+                <div key={i} style={{ display: 'flex', gap: '.6rem', padding: '.4rem 0', borderBottom: '1px solid var(--border)', fontSize: '.82rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <span>{c.icon}</span>
-                  <span style={{ color: 'var(--muted)', minWidth: '200px' }}>{c.label}</span>
-                  <span style={{ color: 'var(--bone)' }}>{c.val}</span>
+                  <span style={{ color: 'var(--muted)', minWidth: '140px', flex: '0 0 auto' }}>{c.label}</span>
+                  <span style={{ color: 'var(--bone)', wordBreak: 'break-word' }}>{c.val}</span>
                 </div>
               ))}
             </div>
@@ -1107,9 +1199,9 @@ export default function App() {
             })}
 
             {/* Add item */}
-            <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', marginTop: '.5rem', marginBottom: '1rem' }}>
-              <input value={newItemText} onChange={e => setNewItemText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="Ajouter un item…" style={{ ...inputStyle, flex: 1 }} />
-              <select value={newItemCat} onChange={e => setNewItemCat(e.target.value)} style={{ ...inputStyle, width: '130px' }}>
+            <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', marginTop: '.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+              <input value={newItemText} onChange={e => setNewItemText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="Ajouter un item…" style={{ ...inputStyle, flex: '1 1 150px', minWidth: 0 }} />
+              <select value={newItemCat} onChange={e => setNewItemCat(e.target.value)} style={{ ...inputStyle, flex: '0 0 auto', width: '130px' }}>
                 {CHECKLIST_CATS.map(c => <option key={c.id} value={c.id}>{c.icon} {c.id}</option>)}
               </select>
               <button onClick={addItem} disabled={!newItemText.trim()} style={{ padding: '.4rem .7rem', background: newItemText.trim() ? 'rgba(196,149,106,.15)' : 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: newItemText.trim() ? 'var(--amber)' : 'var(--muted)', cursor: newItemText.trim() ? 'pointer' : 'default', fontSize: '.82rem' }}>+</button>
@@ -1117,10 +1209,10 @@ export default function App() {
 
             {/* Backup / Restore + Discord */}
             <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <button onClick={backupChecklist} style={{ fontSize: '.74rem', padding: '.35rem .7rem', background: 'rgba(76,175,122,.1)', border: '1px solid rgba(76,175,122,.25)', borderRadius: '3px', color: 'var(--green)', cursor: 'pointer' }}>💾 Sauvegarder la liste</button>
-              <button onClick={restoreChecklist} style={{ fontSize: '.74rem', padding: '.35rem .7rem', background: 'rgba(224,112,80,.1)', border: '1px solid rgba(224,112,80,.25)', borderRadius: '3px', color: '#e07050', cursor: 'pointer' }}>♻ Restaurer</button>
-              <a href={TRIP.discord} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', padding: '.35rem .7rem', background: 'rgba(114,137,218,.1)', border: '1px solid rgba(114,137,218,.2)', borderRadius: '3px', color: '#7289da', fontSize: '.74rem', textDecoration: 'none', marginLeft: 'auto' }}>
-                💬 Discord · #matos
+              <button onClick={backupChecklist} style={{ fontSize: '.72rem', padding: '.35rem .6rem', background: 'rgba(76,175,122,.1)', border: '1px solid rgba(76,175,122,.25)', borderRadius: '3px', color: 'var(--green)', cursor: 'pointer' }}>💾 Sauvegarder</button>
+              <button onClick={restoreChecklist} style={{ fontSize: '.72rem', padding: '.35rem .6rem', background: 'rgba(224,112,80,.1)', border: '1px solid rgba(224,112,80,.25)', borderRadius: '3px', color: '#e07050', cursor: 'pointer' }}>♻ Restaurer</button>
+              <a href={TRIP.discord} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', padding: '.35rem .6rem', background: 'rgba(114,137,218,.1)', border: '1px solid rgba(114,137,218,.2)', borderRadius: '3px', color: '#7289da', fontSize: '.72rem', textDecoration: 'none', marginLeft: 'auto' }}>
+                💬 Discord
               </a>
             </div>
           </>
