@@ -170,13 +170,13 @@ const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=DM+Sans:wght@300;400;500&display=swap');
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   :root{
-    --bg:#192e23;--bg2:#213529;--bg3:#2a4235;--bg4:#314e40;
+    --bg:#1e3a2c;--bg2:#294536;--bg3:#34543f;--bg4:#3d6249;
     --amber:#d4921c;--amberl:#e8ad3f;--amberd:rgba(212,146,28,.14);
     --horse:#9b6534;--horsel:#d4945a;--horsed:rgba(155,101,52,.14);
     --lake:#2d5f8a;--lakel:#5a9fcc;--laked:rgba(45,95,138,.14);
     --city:#5a3e8a;--cityl:#9b78d4;--cityd:rgba(90,62,138,.14);
-    --bone:#f0e8d5;--bone2:#d8ccb4;--muted:#5c7a68;--green:#4caf7a;
-    --red:#c0391b;--border:rgba(240,232,213,.1);
+    --bone:#f0e8d5;--bone2:#d8ccb4;--muted:#93b09d;--green:#4caf7a;
+    --red:#c0391b;--border:rgba(240,232,213,.16);
   }
   html,body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--bone);min-height:100vh}
   .wrap{max-width:980px;margin:0 auto;padding:0 1.1rem 5rem}
@@ -199,8 +199,10 @@ const CSS = `
   .tab{padding:.6rem 1.1rem;font-size:.79rem;font-weight:500;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:'DM Sans',sans-serif;white-space:nowrap}
   .tab:hover{color:var(--bone)}
   .tab.on{color:var(--amber);border-bottom-color:var(--amber)}
-  @media(max-width:500px){
-    .tab{padding:.5rem .65rem;font-size:.7rem;letter-spacing:.04em}
+  @media(max-width:620px){
+    .tabs{flex-wrap:wrap;overflow-x:visible;border-bottom:none;gap:.4rem;justify-content:center}
+    .tab{flex:0 0 auto;padding:.4rem .8rem;font-size:.68rem;letter-spacing:.03em;border:1px solid var(--border);border-radius:20px}
+    .tab.on{background:rgba(212,146,28,.15);border-color:var(--amber)}
   }
 
   .slbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.13em;color:var(--amber);margin-bottom:.7rem}
