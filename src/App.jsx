@@ -445,6 +445,25 @@ function IdentityGate({ members, onChoose }) {
   )
 }
 
+// ─── Confirm/alert modal (replaces native confirm()/alert()) ──────────────
+function ConfirmDialog({ dialog, onClose }) {
+  if (!dialog) return null
+  const { message, onConfirm, alertOnly, danger } = dialog
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,20,15,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={onClose}>
+      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '1.2rem', maxWidth: '380px', width: '100%', boxShadow: '0 8px 30px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: '.86rem', color: 'var(--bone)', marginBottom: '1.1rem', lineHeight: 1.5 }}>{message}</div>
+        <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
+          {!alertOnly && (
+            <button onClick={onClose} style={{ padding: '.4rem .8rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--muted)', fontSize: '.78rem', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>Annuler</button>
+          )}
+          <button onClick={() => { onConfirm?.(); onClose() }} style={{ padding: '.4rem .8rem', background: danger ? '#e07050' : 'var(--amber)', border: 'none', borderRadius: '3px', color: 'var(--bg)', fontSize: '.78rem', fontWeight: 500, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>{alertOnly ? 'OK' : 'Confirmer'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Inline contact editor ─────────────────────────────────────────────────
 function EditContact({ phone, email, onSave, onCancel }) {
   const [ph, setPh] = useState(phone)
@@ -498,6 +517,9 @@ export default function App() {
   const dayEditorRef = useRef(null)
   const [countdown, setCountdown] = useState(null)
   const [currentUser, setCurrentUserState] = useState(getCurrentUser)
+  const [dialog, setDialog] = useState(null)
+  const askConfirm = (message, onConfirm, opts = {}) => setDialog({ message, onConfirm, ...opts })
+  const showAlert = (message) => setDialog({ message, alertOnly: true })
 
   function chooseUser(name) {
     setCurrentUser(name)
@@ -684,6 +706,7 @@ export default function App() {
   return (
     <>
       <style>{CSS}</style>
+      <ConfirmDialog dialog={dialog} onClose={() => setDialog(null)} />
       <div className="wrap">
 
         {/* Header */}
@@ -1001,8 +1024,7 @@ export default function App() {
           const deletePoint = (id) => {
             if (mapPoints.length <= 1) return
             const p = mapPoints.find(pt => pt.id === id)
-            if (!confirm(`Supprimer le point "${p?.name || ''}" ?`)) return
-            savePoints(mapPoints.filter(pt => pt.id !== id))
+            askConfirm(`Supprimer le point "${p?.name || ''}" ?`, () => savePoints(mapPoints.filter(pt => pt.id !== id)), { danger: true })
           }
           const inputStyle = { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.4rem .6rem', color: 'var(--bone)', fontSize: '.8rem' }
           return (
@@ -1183,12 +1205,13 @@ export default function App() {
           }
           const removeItem = (itemId) => {
             const item = checklist.items.find(i => i.id === itemId)
-            if (!confirm(`Supprimer "${item?.text || ''}" pour tout le monde ?`)) return
-            const newChecked = {}
-            for (const [name, arr] of Object.entries(checklist.checked)) {
-              newChecked[name] = arr.filter(id => id !== itemId)
-            }
-            saveCheck({ items: checklist.items.filter(i => i.id !== itemId), checked: newChecked })
+            askConfirm(`Supprimer "${item?.text || ''}" pour tout le monde ?`, () => {
+              const newChecked = {}
+              for (const [name, arr] of Object.entries(checklist.checked)) {
+                newChecked[name] = arr.filter(id => id !== itemId)
+              }
+              saveCheck({ items: checklist.items.filter(i => i.id !== itemId), checked: newChecked })
+            }, { danger: true })
           }
           const moveItem = (itemId, dir) => {
             const item = checklist.items.find(i => i.id === itemId)
@@ -1215,32 +1238,32 @@ export default function App() {
             setNewBackupName('')
           }
           const restoreBackup = (entry) => {
-            if (!confirm(`Restaurer "${entry.name}" (${entry.items.length} items) ? Les items actuels seront remplacés.`)) return
-            saveCheck({ items: entry.items, checked: Object.fromEntries(TRIP.members.map(m => [m.name, []])) })
+            askConfirm(`Restaurer "${entry.name}" (${entry.items.length} items) ? Les items actuels seront remplacés.`, () => {
+              saveCheck({ items: entry.items, checked: Object.fromEntries(TRIP.members.map(m => [m.name, []])) })
+            }, { danger: true })
           }
           const deleteBackup = (id) => {
             const entry = backups.find(b => b.id === id)
-            if (!confirm(`Supprimer la sauvegarde "${entry?.name || ''}" ?`)) return
-            const next = backups.filter(b => b.id !== id)
-            setBackups(next)
-            kvSet('kg-checklist-backups', next)
+            askConfirm(`Supprimer la sauvegarde "${entry?.name || ''}" ?`, () => {
+              const next = backups.filter(b => b.id !== id)
+              setBackups(next)
+              kvSet('kg-checklist-backups', next)
+            }, { danger: true })
           }
           const addCategory = () => {
             const name = newCatName.trim()
             if (!name) return
-            if (checklistCats.some(c => c.id.toLowerCase() === name.toLowerCase())) { alert('Cette catégorie existe déjà.'); return }
+            if (checklistCats.some(c => c.id.toLowerCase() === name.toLowerCase())) { showAlert('Cette catégorie existe déjà.'); return }
             const nextCats = [...checklistCats, { id: name, icon: newCatIcon.trim() || '📦' }]
             setChecklistCats(nextCats)
             kvSet('kg-checklist-cats', nextCats)
             setNewCatName('')
             setNewCatIcon('')
           }
-          const resetChecklist = () => {
-            if (!confirm('Réinitialiser la checklist entière (items, catégories et cases cochées) pour tout le monde ?')) return
-            setChecklist(DEFAULT_CHECKLIST)
-            setChecklistCats(DEFAULT_CHECKLIST_CATS)
-            kvSet('kg-checklist', DEFAULT_CHECKLIST)
-            kvSet('kg-checklist-cats', DEFAULT_CHECKLIST_CATS)
+          const clearMyChecks = () => {
+            askConfirm(`Décocher tous tes items cochés (${viewing}) ?`, () => {
+              saveCheck({ ...checklist, checked: { ...checklist.checked, [viewing]: [] } })
+            })
           }
           const userChecked = checklist.checked[viewing] || []
           const totalItems = checklist.items.length
@@ -1259,6 +1282,7 @@ export default function App() {
                   {TRIP.members.map(m => <option key={m.name} value={m.name}>{m.name}{m.name === currentUser ? ' (moi)' : ''}</option>)}
                 </select>
                 {isReadOnly && <span style={{ fontSize: '.68rem', color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.15rem .4rem' }}>🔒 Lecture seule</span>}
+                {!isReadOnly && <button onClick={clearMyChecks} style={{ fontSize: '.68rem', padding: '.2rem .5rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--muted)', cursor: 'pointer' }}>⟲ Tout décocher</button>}
                 <div style={{ fontSize: '.78rem', color: 'var(--bone)', fontFamily: "'Playfair Display',serif", marginLeft: 'auto' }}>{checkedCount}/{totalItems}</div>
               </div>
               <div style={{ height: '6px', background: 'var(--bg)', borderRadius: '3px', overflow: 'hidden' }}>
@@ -1326,7 +1350,6 @@ export default function App() {
             <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: backups.length ? '.6rem' : 0 }}>
               <input value={newBackupName} onChange={e => setNewBackupName(e.target.value)} onKeyDown={e => e.key === 'Enter' && backupChecklist()} placeholder="Nom de la sauvegarde…" style={{ ...inputStyle, flex: '1 1 160px', minWidth: 0 }} />
               <button onClick={backupChecklist} style={{ fontSize: '.72rem', padding: '.35rem .6rem', background: 'rgba(76,175,122,.1)', border: '1px solid rgba(76,175,122,.25)', borderRadius: '3px', color: 'var(--green)', cursor: 'pointer' }}>💾 Sauvegarder</button>
-              <button onClick={resetChecklist} style={{ fontSize: '.72rem', padding: '.35rem .6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--muted)', cursor: 'pointer' }}>⟲ Réinitialiser</button>
               <a href={TRIP.discord} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', padding: '.35rem .6rem', background: 'rgba(114,137,218,.1)', border: '1px solid rgba(114,137,218,.2)', borderRadius: '3px', color: '#7289da', fontSize: '.72rem', textDecoration: 'none', marginLeft: 'auto' }}>
                 💬 Discord
               </a>
