@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { kvGet, kvSet, kvSubscribe } from './supabase.js'
+import { getCurrentUser, setCurrentUser, clearCurrentUser } from './identity.js'
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -24,6 +25,7 @@ const TRIP = {
   drive: 'https://drive.google.com/drive/folders/1EYBsgJAOiabYTCtLQQ1D0zBIisESeV36?usp=sharing',
   miro: 'https://miro.com/welcomeonboard/cFBSTGdYczZjNS9QQ1NOL3FlbnRnYkN6UlZ0S1dqaWZxTUovUHhCaUwrM3liYnpFcExtWUZhTmhtUndnVC80QU5UbkVoU0lUMnQrSFRDWHpremtFVC92ZU1iSXRQVlI4Q2FWKzYvQ1dWbGM3bk53b1lNaTRjNDZNZGk2SW5zRlBBS2NFMDFkcUNFSnM0d3FEN050ekl3PT0hdjE=?share_link_id=438974220017',
   discord: 'https://discord.gg/eGspcXmcD8',
+  whatsapp: 'https://chat.whatsapp.com/HePOoUv1nI861BgvWv3k4C',
   horseAgency: 'Tatosh',
 }
 
@@ -82,7 +84,7 @@ function emptyDay(day) {
   return { location: '', activity: '', accommodation: '', transport: '4×4', route: '', notes: '', confirmed: false }
 }
 
-const CHECKLIST_CATS = [
+const DEFAULT_CHECKLIST_CATS = [
   { id: 'Vêtements', icon: '👕' },
   { id: 'Campement', icon: '⛺' },
   { id: 'Équipement', icon: '🎒' },
@@ -422,6 +424,27 @@ const CSS = `
   }
 `
 
+// ─── Identity gate ("Je suis : ___") ───────────────────────────────────────
+function IdentityGate({ members, onChoose }) {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
+      <div style={{ width: '100%', maxWidth: '380px', textAlign: 'center' }}>
+        <h1 className="title" style={{ marginBottom: '.3rem' }}><em>Kirghizistan</em> 2026</h1>
+        <div style={{ fontSize: '.82rem', color: 'var(--muted)', marginBottom: '1.5rem' }}>Je suis :</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
+          {members.map(m => (
+            <button key={m.name} onClick={() => onChoose(m.name)}
+              style={{ padding: '.65rem .9rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--bone)', fontSize: '.88rem', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", textAlign: 'left' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--amber)'; e.currentTarget.style.color = 'var(--amber)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--bone)' }}
+            >{m.name}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Inline contact editor ─────────────────────────────────────────────────
 function EditContact({ phone, email, onSave, onCancel }) {
   const [ph, setPh] = useState(phone)
@@ -453,7 +476,6 @@ export default function App() {
   )
   const [editingContact, setEditingContact] = useState(null)
   const [sharedNotes, setSharedNotes] = useState([])
-  const [noteName, setNoteName] = useState('')
   const [noteText, setNoteText] = useState('')
   const [aiOpen, setAiOpen] = useState(false)
   const [aiInput, setAiInput] = useState('')
@@ -464,12 +486,27 @@ export default function App() {
   const [editingPoint, setEditingPoint] = useState(null)
   const [addingPoint, setAddingPoint] = useState(null) // { day, name }
   const [checklist, setChecklist] = useState(DEFAULT_CHECKLIST)
-  const [checklistUser, setChecklistUser] = useState(TRIP.members[0].name)
+  const [checklistCats, setChecklistCats] = useState(DEFAULT_CHECKLIST_CATS)
+  const [viewedChecklistUser, setViewedChecklistUser] = useState(null)
   const [newItemText, setNewItemText] = useState('')
   const [newItemCat, setNewItemCat] = useState('Équipement')
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatIcon, setNewCatIcon] = useState('')
+  const [backups, setBackups] = useState([])
+  const [newBackupName, setNewBackupName] = useState('')
   const flashTimer = useRef(null)
   const dayEditorRef = useRef(null)
   const [countdown, setCountdown] = useState(null)
+  const [currentUser, setCurrentUserState] = useState(getCurrentUser)
+
+  function chooseUser(name) {
+    setCurrentUser(name)
+    setCurrentUserState(name)
+  }
+  function changeUser() {
+    clearCurrentUser()
+    setCurrentUserState(null)
+  }
 
   // ── Live countdown to departure ──
   useEffect(() => {
@@ -492,18 +529,22 @@ export default function App() {
   // ── Load all data from Supabase on mount ──
   useEffect(() => {
     async function load() {
-      const [itin, ctcts, notes, pts, cl] = await Promise.all([
+      const [itin, ctcts, notes, pts, cl, cats, bks] = await Promise.all([
         kvGet('kg-itin'),
         kvGet('kg-contacts'),
         kvGet('kg-notes'),
         kvGet('kg-mappoints'),
         kvGet('kg-checklist'),
+        kvGet('kg-checklist-cats'),
+        kvGet('kg-checklist-backups'),
       ])
       if (itin) setItinerary(itin)
       if (ctcts) setContacts(ctcts)
       if (notes) setSharedNotes(notes)
       if (pts) setMapPoints(sortPoints(pts))
       if (cl) setChecklist(cl)
+      if (cats) setChecklistCats(cats)
+      if (bks) setBackups(bks)
       setLoaded(true)
     }
     load()
@@ -514,6 +555,7 @@ export default function App() {
     const s3 = kvSubscribe('kg-notes', (val) => setSharedNotes(val))
     const s4 = kvSubscribe('kg-mappoints', (val) => { if (val) setMapPoints(sortPoints(val)) })
     const s5 = kvSubscribe('kg-checklist', (val) => { if (val) setChecklist(val) })
+    const s6 = kvSubscribe('kg-checklist-cats', (val) => { if (val) setChecklistCats(val) })
 
     return () => {
       s1.unsubscribe()
@@ -521,6 +563,7 @@ export default function App() {
       s3.unsubscribe()
       s4.unsubscribe()
       s5.unsubscribe()
+      s6.unsubscribe()
     }
   }, [])
 
@@ -569,7 +612,7 @@ export default function App() {
     if (!noteText.trim()) return
     const n = {
       id: Date.now(),
-      author: noteName.trim() || 'Anonyme',
+      author: currentUser,
       text: noteText.trim(),
       ts: new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
     }
@@ -629,6 +672,15 @@ export default function App() {
   const phaseClass = (p) => p === 'city' || p === 'return' ? 'cap' : p === 'horse' ? 'horse' : 'x4'
 
   // ── Render ──
+  if (!currentUser) {
+    return (
+      <>
+        <style>{CSS}</style>
+        <IdentityGate members={TRIP.members} onChoose={chooseUser} />
+      </>
+    )
+  }
+
   return (
     <>
       <style>{CSS}</style>
@@ -639,6 +691,7 @@ export default function App() {
           <div className="hdr-row">
             <h1 className="title"><em>Kirghizistan</em> 2026</h1>
             <span className="bdg bdg-a">PNR {TRIP.pnr}</span>
+            <button onClick={changeUser} style={{ fontSize: '.7rem', padding: '.3rem .55rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--muted)', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>👤 {currentUser} · changer</button>
           </div>
           <div className="badges">
             <span className="bdg bdg-o">👥 {TRIP.group} personnes</span>
@@ -670,6 +723,7 @@ export default function App() {
               <a href={TRIP.drive} target="_blank" rel="noreferrer" className="hdr-link"><span className="hl-icon">📁</span><div><div className="hl-label">Drive</div><div className="hl-sub">Documents</div></div></a>
               <a href={TRIP.miro} target="_blank" rel="noreferrer" className="hdr-link"><span className="hl-icon">🗺</span><div><div className="hl-label">Miro</div><div className="hl-sub">Tableau</div></div></a>
               <a href={TRIP.discord} target="_blank" rel="noreferrer" className="hdr-link"><span className="hl-icon">💬</span><div><div className="hl-label">Discord</div><div className="hl-sub">Groupe</div></div></a>
+              <a href={TRIP.whatsapp} target="_blank" rel="noreferrer" className="hdr-link"><span className="hl-icon">📱</span><div><div className="hl-label">WhatsApp</div><div className="hl-sub">Communauté</div></div></a>
             </div>
           </div>
         </div>
@@ -862,7 +916,7 @@ export default function App() {
               <div key={n} className="flight-card"><span className="f-num">{n}</span><span className="f-txt">{f} → {t} · {h}</span><span className="f-dir f-in">Retour</span></div>
             ))}
             <div className="stats">
-              {[['8', 'voyageurs'], ['15', 'nuits'], ['4', 'jours cheval'], ['20kg', 'bagages soute']].map(([n, l]) => (
+              {[['8', 'voyageurs'], ['15', 'nuits'], ['4', 'jours cheval'], ['20kg', 'bagages soute'], ['8kg', 'bagage cabine · 55×40×23cm']].map(([n, l]) => (
                 <div key={l} className="stat"><div className="stat-n">{n}</div><div className="stat-l">{l}</div></div>
               ))}
             </div>
@@ -870,9 +924,10 @@ export default function App() {
               <div className="slbl">👥 Le groupe</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(180px, 100%),1fr))', gap: '.4rem' }}>
                 {TRIP.members.map((m, i) => (
-                  <div key={m.name} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.55rem .8rem', fontSize: '.82rem', display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+                  <div key={m.name} style={{ background: m.name === currentUser ? 'rgba(76,175,122,.15)' : 'var(--bg2)', border: `1px solid ${m.name === currentUser ? 'rgba(76,175,122,.35)' : 'var(--border)'}`, borderRadius: '3px', padding: '.55rem .8rem', fontSize: '.82rem', display: 'flex', alignItems: 'center', gap: '.5rem' }}>
                     <span style={{ color: 'var(--amber)', fontFamily: "'Playfair Display',serif", fontSize: '.9rem' }}>{i + 1}</span>
                     <span>{m.name}</span>
+                    {m.name === currentUser && <span style={{ marginLeft: 'auto', fontSize: '.65rem', color: 'var(--green)' }}>moi</span>}
                   </div>
                 ))}
               </div>
@@ -1076,8 +1131,8 @@ export default function App() {
                 const c = contacts[m.name] || { phone: '', email: '' }
                 const isEditing = editingContact === m.name
                 return (
-                  <div key={m.name} className="contact-card" onClick={() => !isEditing && setEditingContact(m.name)}>
-                    <div className="contact-name">{m.name}</div>
+                  <div key={m.name} className="contact-card" style={m.name === currentUser ? { background: 'rgba(76,175,122,.15)', borderColor: 'rgba(76,175,122,.35)' } : undefined} onClick={() => !isEditing && setEditingContact(m.name)}>
+                    <div className="contact-name">{m.name}{m.name === currentUser && <span style={{ marginLeft: '.5rem', fontSize: '.65rem', color: 'var(--green)' }}>moi</span>}</div>
                     {isEditing ? (
                       <EditContact phone={c.phone} email={c.email} onSave={(ph, em) => saveContact(m.name, ph, em)} onCancel={() => setEditingContact(null)} />
                     ) : (
@@ -1111,11 +1166,14 @@ export default function App() {
 
         {/* ══ CHECKLIST ══ */}
         {tab === 'matos' && (() => {
+          const viewing = viewedChecklistUser || currentUser
+          const isReadOnly = viewing !== currentUser
           const saveCheck = (data) => { setChecklist(data); kvSet('kg-checklist', data) }
           const toggleItem = (itemId) => {
-            const arr = checklist.checked[checklistUser] || []
+            if (isReadOnly) return
+            const arr = checklist.checked[currentUser] || []
             const next = arr.includes(itemId) ? arr.filter(id => id !== itemId) : [...arr, itemId]
-            saveCheck({ ...checklist, checked: { ...checklist.checked, [checklistUser]: next } })
+            saveCheck({ ...checklist, checked: { ...checklist.checked, [currentUser]: next } })
           }
           const addItem = () => {
             if (!newItemText.trim()) return
@@ -1132,17 +1190,59 @@ export default function App() {
             }
             saveCheck({ items: checklist.items.filter(i => i.id !== itemId), checked: newChecked })
           }
+          const moveItem = (itemId, dir) => {
+            const item = checklist.items.find(i => i.id === itemId)
+            const catIds = checklist.items.filter(i => i.cat === item.cat).map(i => i.id)
+            const idx = catIds.indexOf(itemId)
+            const swapId = catIds[idx + dir]
+            if (swapId === undefined) return
+            const items = [...checklist.items]
+            const i1 = items.findIndex(i => i.id === itemId)
+            const i2 = items.findIndex(i => i.id === swapId)
+            ;[items[i1], items[i2]] = [items[i2], items[i1]]
+            saveCheck({ ...checklist, items })
+          }
+          const changeItemCat = (itemId, cat) => {
+            saveCheck({ ...checklist, items: checklist.items.map(i => i.id === itemId ? { ...i, cat } : i) })
+          }
+          const MAX_BACKUPS = 10
           const backupChecklist = () => {
-            kvSet('kg-checklist-backup', checklist.items)
-            alert(`Sauvegarde effectuée ! (${checklist.items.length} items)`)
+            const name = newBackupName.trim() || `Sauvegarde du ${new Date().toLocaleDateString('fr-FR')}`
+            const entry = { id: Date.now(), name, date: new Date().toISOString(), items: checklist.items }
+            const next = [entry, ...backups].slice(0, MAX_BACKUPS)
+            setBackups(next)
+            kvSet('kg-checklist-backups', next)
+            setNewBackupName('')
           }
-          const restoreChecklist = async () => {
-            const backup = await kvGet('kg-checklist-backup')
-            if (!backup || backup.length === 0) { alert('Aucune sauvegarde trouvée.'); return }
-            if (!confirm(`Restaurer la sauvegarde (${backup.length} items) ? Les items actuels seront remplacés.`)) return
-            saveCheck({ items: backup, checked: Object.fromEntries(TRIP.members.map(m => [m.name, []])) })
+          const restoreBackup = (entry) => {
+            if (!confirm(`Restaurer "${entry.name}" (${entry.items.length} items) ? Les items actuels seront remplacés.`)) return
+            saveCheck({ items: entry.items, checked: Object.fromEntries(TRIP.members.map(m => [m.name, []])) })
           }
-          const userChecked = checklist.checked[checklistUser] || []
+          const deleteBackup = (id) => {
+            const entry = backups.find(b => b.id === id)
+            if (!confirm(`Supprimer la sauvegarde "${entry?.name || ''}" ?`)) return
+            const next = backups.filter(b => b.id !== id)
+            setBackups(next)
+            kvSet('kg-checklist-backups', next)
+          }
+          const addCategory = () => {
+            const name = newCatName.trim()
+            if (!name) return
+            if (checklistCats.some(c => c.id.toLowerCase() === name.toLowerCase())) { alert('Cette catégorie existe déjà.'); return }
+            const nextCats = [...checklistCats, { id: name, icon: newCatIcon.trim() || '📦' }]
+            setChecklistCats(nextCats)
+            kvSet('kg-checklist-cats', nextCats)
+            setNewCatName('')
+            setNewCatIcon('')
+          }
+          const resetChecklist = () => {
+            if (!confirm('Réinitialiser la checklist entière (items, catégories et cases cochées) pour tout le monde ?')) return
+            setChecklist(DEFAULT_CHECKLIST)
+            setChecklistCats(DEFAULT_CHECKLIST_CATS)
+            kvSet('kg-checklist', DEFAULT_CHECKLIST)
+            kvSet('kg-checklist-cats', DEFAULT_CHECKLIST_CATS)
+          }
+          const userChecked = checklist.checked[viewing] || []
           const totalItems = checklist.items.length
           const checkedCount = userChecked.length
           const pct = totalItems > 0 ? Math.round((checkedCount / totalItems) * 100) : 0
@@ -1153,12 +1253,13 @@ export default function App() {
             {/* Header */}
             <div className="slbl">✅ Checklist — Matos & Logistique</div>
             <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.8rem 1rem', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '.8rem', flexWrap: 'wrap', marginBottom: '.6rem' }}>
-                <label style={{ fontSize: '.76rem', color: 'var(--muted)' }}>Qui es-tu ?</label>
-                <select value={checklistUser} onChange={e => setChecklistUser(e.target.value)} style={{ ...inputStyle, flex: 1, maxWidth: '220px' }}>
-                  {TRIP.members.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap', marginBottom: '.6rem' }}>
+                <label style={{ fontSize: '.76rem', color: 'var(--muted)' }}>Checklist de</label>
+                <select value={viewing} onChange={e => setViewedChecklistUser(e.target.value === currentUser ? null : e.target.value)} style={{ ...inputStyle, flex: '0 1 200px' }}>
+                  {TRIP.members.map(m => <option key={m.name} value={m.name}>{m.name}{m.name === currentUser ? ' (moi)' : ''}</option>)}
                 </select>
-                <div style={{ fontSize: '.78rem', color: 'var(--bone)', fontFamily: "'Playfair Display',serif" }}>{checkedCount}/{totalItems}</div>
+                {isReadOnly && <span style={{ fontSize: '.68rem', color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.15rem .4rem' }}>🔒 Lecture seule</span>}
+                <div style={{ fontSize: '.78rem', color: 'var(--bone)', fontFamily: "'Playfair Display',serif", marginLeft: 'auto' }}>{checkedCount}/{totalItems}</div>
               </div>
               <div style={{ height: '6px', background: 'var(--bg)', borderRadius: '3px', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? 'var(--green)' : 'var(--amber)', borderRadius: '3px', transition: 'width .3s' }} />
@@ -1166,7 +1267,7 @@ export default function App() {
             </div>
 
             {/* Categories */}
-            {CHECKLIST_CATS.map(cat => {
+            {checklistCats.map(cat => {
               const catItems = checklist.items.filter(i => i.cat === cat.id)
               if (catItems.length === 0) return null
               const catChecked = catItems.filter(i => userChecked.includes(i.id)).length
@@ -1176,12 +1277,16 @@ export default function App() {
                     <span>{cat.icon}</span> {cat.id}
                     <span style={{ fontSize: '.68rem', color: 'var(--muted)', fontFamily: 'system-ui' }}>({catChecked}/{catItems.length})</span>
                   </div>
-                  {catItems.map(item => {
+                  {catItems.map((item, itemIdx) => {
                     const isChecked = userChecked.includes(item.id)
-                    const othersWhoChecked = TRIP.members.filter(m => m.name !== checklistUser && (checklist.checked[m.name] || []).includes(item.id))
+                    const othersWhoChecked = TRIP.members.filter(m => m.name !== viewing && (checklist.checked[m.name] || []).includes(item.id))
                     return (
                       <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.35rem .4rem', borderBottom: '1px solid var(--border)' }}>
-                        <input type="checkbox" checked={isChecked} onChange={() => toggleItem(item.id)} style={{ accentColor: 'var(--amber)', cursor: 'pointer', flexShrink: 0 }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+                          <button onClick={() => moveItem(item.id, -1)} disabled={itemIdx === 0} title="Monter" style={{ background: 'none', border: 'none', color: itemIdx === 0 ? 'var(--border)' : 'var(--muted)', cursor: itemIdx === 0 ? 'default' : 'pointer', fontSize: '.6rem', lineHeight: 1, padding: '1px' }}>▲</button>
+                          <button onClick={() => moveItem(item.id, 1)} disabled={itemIdx === catItems.length - 1} title="Descendre" style={{ background: 'none', border: 'none', color: itemIdx === catItems.length - 1 ? 'var(--border)' : 'var(--muted)', cursor: itemIdx === catItems.length - 1 ? 'default' : 'pointer', fontSize: '.6rem', lineHeight: 1, padding: '1px' }}>▼</button>
+                        </div>
+                        <input type="checkbox" checked={isChecked} disabled={isReadOnly} onChange={() => toggleItem(item.id)} style={{ accentColor: 'var(--amber)', cursor: isReadOnly ? 'default' : 'pointer', flexShrink: 0 }} />
                         <div style={{ flex: 1, fontSize: '.8rem', color: isChecked ? 'var(--muted)' : 'var(--bone)', textDecoration: isChecked ? 'line-through' : 'none' }}>{item.text}</div>
                         <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
                           {othersWhoChecked.map(m => (
@@ -1190,6 +1295,9 @@ export default function App() {
                             </span>
                           ))}
                         </div>
+                        <select value={item.cat} onChange={e => changeItemCat(item.id, e.target.value)} title="Déplacer vers une autre catégorie" style={{ flexShrink: 0, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--muted)', fontSize: '.68rem', padding: '.15rem 1.3rem .15rem .35rem', width: '128px' }}>
+                          {checklistCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.id}</option>)}
+                        </select>
                         <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.7rem', padding: '2px 4px', opacity: .5 }} title="Supprimer pour tout le monde">✕</button>
                       </div>
                     )
@@ -1199,22 +1307,44 @@ export default function App() {
             })}
 
             {/* Add item */}
-            <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', marginTop: '.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', marginTop: '.5rem', marginBottom: '.7rem', flexWrap: 'wrap' }}>
               <input value={newItemText} onChange={e => setNewItemText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="Ajouter un item…" style={{ ...inputStyle, flex: '1 1 150px', minWidth: 0 }} />
               <select value={newItemCat} onChange={e => setNewItemCat(e.target.value)} style={{ ...inputStyle, flex: '0 0 auto', width: '130px' }}>
-                {CHECKLIST_CATS.map(c => <option key={c.id} value={c.id}>{c.icon} {c.id}</option>)}
+                {checklistCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.id}</option>)}
               </select>
               <button onClick={addItem} disabled={!newItemText.trim()} style={{ padding: '.4rem .7rem', background: newItemText.trim() ? 'rgba(196,149,106,.15)' : 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: newItemText.trim() ? 'var(--amber)' : 'var(--muted)', cursor: newItemText.trim() ? 'pointer' : 'default', fontSize: '.82rem' }}>+</button>
             </div>
 
-            {/* Backup / Restore + Discord */}
-            <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Add category */}
+            <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+              <input value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)} placeholder="🏷" style={{ ...inputStyle, flex: '0 0 auto', width: '48px', textAlign: 'center' }} maxLength={4} />
+              <input value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCategory()} placeholder="Nouvelle catégorie…" style={{ ...inputStyle, flex: '1 1 150px', minWidth: 0 }} />
+              <button onClick={addCategory} disabled={!newCatName.trim()} style={{ padding: '.4rem .7rem', background: newCatName.trim() ? 'rgba(196,149,106,.15)' : 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: newCatName.trim() ? 'var(--amber)' : 'var(--muted)', cursor: newCatName.trim() ? 'pointer' : 'default', fontSize: '.82rem' }}>+ Catégorie</button>
+            </div>
+
+            {/* Backup / Restore + Reset + Discord */}
+            <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: backups.length ? '.6rem' : 0 }}>
+              <input value={newBackupName} onChange={e => setNewBackupName(e.target.value)} onKeyDown={e => e.key === 'Enter' && backupChecklist()} placeholder="Nom de la sauvegarde…" style={{ ...inputStyle, flex: '1 1 160px', minWidth: 0 }} />
               <button onClick={backupChecklist} style={{ fontSize: '.72rem', padding: '.35rem .6rem', background: 'rgba(76,175,122,.1)', border: '1px solid rgba(76,175,122,.25)', borderRadius: '3px', color: 'var(--green)', cursor: 'pointer' }}>💾 Sauvegarder</button>
-              <button onClick={restoreChecklist} style={{ fontSize: '.72rem', padding: '.35rem .6rem', background: 'rgba(224,112,80,.1)', border: '1px solid rgba(224,112,80,.25)', borderRadius: '3px', color: '#e07050', cursor: 'pointer' }}>♻ Restaurer</button>
+              <button onClick={resetChecklist} style={{ fontSize: '.72rem', padding: '.35rem .6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--muted)', cursor: 'pointer' }}>⟲ Réinitialiser</button>
               <a href={TRIP.discord} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', padding: '.35rem .6rem', background: 'rgba(114,137,218,.1)', border: '1px solid rgba(114,137,218,.2)', borderRadius: '3px', color: '#7289da', fontSize: '.72rem', textDecoration: 'none', marginLeft: 'auto' }}>
                 💬 Discord
               </a>
             </div>
+            {backups.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '.3rem' }}>
+                {backups.map(b => (
+                  <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '.5rem', fontSize: '.74rem', padding: '.35rem .55rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '3px', flexWrap: 'wrap' }}>
+                    <span style={{ color: 'var(--bone)' }}>💾 {b.name}</span>
+                    <span style={{ color: 'var(--muted)' }}>{new Date(b.date).toLocaleDateString('fr-FR')} · {b.items.length} items</span>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '.4rem' }}>
+                      <button onClick={() => restoreBackup(b)} style={{ fontSize: '.7rem', padding: '.2rem .5rem', background: 'rgba(224,112,80,.1)', border: '1px solid rgba(224,112,80,.25)', borderRadius: '3px', color: '#e07050', cursor: 'pointer' }}>♻ Restaurer</button>
+                      <button onClick={() => deleteBackup(b.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.72rem', opacity: .6 }} title="Supprimer cette sauvegarde">✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
           )
         })()}
@@ -1237,7 +1367,7 @@ export default function App() {
                 ))}
             </div>
             <div className="np-input">
-              <input className="ni-name" placeholder="Ton prénom" value={noteName} onChange={e => setNoteName(e.target.value)} />
+              <div className="ni-name" style={{ display: 'flex', alignItems: 'center' }}>👤 {currentUser}</div>
               <textarea className="ni-text" rows={1} placeholder="Une idée, info, question…" value={noteText} onChange={e => setNoteText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote() } }} />
               <button className="ni-btn" onClick={addNote} disabled={!noteText.trim()}>Ajouter</button>
             </div>

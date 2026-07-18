@@ -4,6 +4,42 @@ Stack : **Vite + React + Supabase** · Déployable sur Vercel gratuitement.
 
 ---
 
+## 🎒 Contexte
+
+Voyage à 8 au Kirghizistan, du **30 juillet au 14 août 2026** : Clara Ka, Henri Blln, Mael Demmerle, Maëlle Guegaden, Nathan Rougier, Rémy Launois, Thibault Azemar, Thomas Mestrou.
+
+Le trip se découpe en 3 phases :
+
+- **J1** — journée ville à Bichkek
+- **J2–J6** — trek à cheval avec nuits en yourte, organisé par l'agence **Tatosh** (contact référent : Henri), incluant un bivouac en altitude vers Song-Köl (~3000–3500m), nuits froides (0°C à -5°C, risque de neige)
+- **J7–J15** — phase autonome en 4x4 dans la zone Issyk-Koul/Karakol, deux véhicules (Subaru Outback + Lexus RX) réservés auprès d'une agence locale (contact : Aydana)
+
+Tatosh fournit les yourtes pendant le trek, mais tente/sac de couchage/matelas sont à gérer par le groupe pour la phase 4x4 — d'où le système de partage de matos (ex : "2 personnes par tente").
+
+Coordination annexe : **Tricount** pour les dépenses, **Google Drive** partagé (sous-dossiers "Song Kol" et "Tatosh") pour les documents.
+
+## 🎯 But de l'app
+
+Centraliser toute la coordination du groupe (itinéraire, contacts, matos, notes) à un seul endroit accessible à tous **sans compte à créer** — plutôt que de disperser l'info entre Drive, Tricount et des messages. Pensée pour un groupe de confiance : pas d'authentification, tout est modifiable par tout le monde.
+
+## 📑 Onglets de l'app
+
+| Onglet | Rôle |
+|--------|------|
+| 📅 Itinéraire | Détail jour par jour du voyage (activités, logement, notes) |
+| ✈ Vols | Récap des vols/trajets du groupe |
+| 🐎 Agences | Infos et contacts des agences (Tatosh, location 4x4) |
+| 🗺 Carte | Carte interactive de l'itinéraire |
+| 👥 Groupe | Coordonnées des 8 membres |
+| ✅ Checklist | Matos à apporter, coché par personne |
+| 💬 Notes | Notes libres partagées par le groupe |
+
+## 🗺 Roadmap en cours
+
+Voir [`ROADMAP.md`](./ROADMAP.md) à la racine du projet pour la checklist fonctionnelle des prochaines features (identité sans authentification, catégories dynamiques, système de "slots" pour l'orga/matos, etc.) — pensé pour donner le contexte à Claude Code sans avoir à tout réexpliquer à chaque session.
+
+---
+
 ## 🚀 Setup en ~10 minutes
 
 ### 1. Supabase (base de données)

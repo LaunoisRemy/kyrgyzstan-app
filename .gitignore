@@ -4,3 +4,7 @@ dist/
 .env
 
 .vercel
+
+dev-out.log
+dev-err.log
+dev-pid.txt
