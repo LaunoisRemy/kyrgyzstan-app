@@ -62,6 +62,9 @@ Découpage des tâches pour reprendre avec Claude Code. Pas de code ici, juste l
 ### Phase 3b — Rattachement checklist ✅ Fait (revu)
 Un item de checklist peut être marqué **"partageable"** (case à la création, ou activable après coup sur un item existant). Contrairement à la première version, **un item partageable peut porter plusieurs slots indépendants** — un par personne qui coche la case en apportant le sien (ex: Rémy ET Maëlle ont chacun leur tente sous le même item "Tente", chacun avec sa propre capacité et ses propres inscrits). Cocher la case pour soi crée/rejoint automatiquement son propre slot ; décocher le retire (confirmation si quelqu'un d'autre y est inscrit). N'importe qui peut s'inscrire sur le slot de quelqu'un d'autre sans cocher l'item lui-même. Un panneau "🎒 Objets partagés" en haut de la Checklist liste tous les items partageables et leurs slots en un coup d'œil. Suppression d'un item cascade sur tous ses slots. Testé en live avec un item de test (double slot, jointure croisée, suppression) — donnée réelle (Tente de Rémy+Henri) non affectée. US 3.1 couverte — Phase 3 complète.
 
+### Petite finition — renommer un item / un slot ✅ Fait
+Cliquer sur le texte d'un item de checklist, ou sur le titre d'un slot Orga autonome, bascule en édition inline (input, Entrée pour valider, Échap pour annuler). Renommer un item met aussi à jour le titre de ses slots rattachés, pour rester cohérent avec l'affichage dans Orga. Un slot rattaché à un item ne se renomme que depuis la Checklist (source de vérité unique), pas depuis Orga.
+
 ### Le principe de base (l'entité "slot")
 
 Un **slot** est une entité indépendante, autonome, qui n'a pas besoin d'un item de checklist pour exister :

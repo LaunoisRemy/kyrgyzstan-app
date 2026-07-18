@@ -548,6 +548,13 @@ export default function App() {
       saveSlots(slots.filter(s => s.id !== slot.id))
     }, { danger: true })
   }
+  const renameSlot = (slot, newTitle) => {
+    const title = newTitle.trim()
+    if (!title || title === slot.title) return
+    saveSlots(slots.map(s => s.id === slot.id ? { ...s, title } : s))
+  }
+  const [editingSlotId, setEditingSlotId] = useState(null)
+  const [editingItemId, setEditingItemId] = useState(null)
 
   function chooseUser(name) {
     setCurrentUser(name)
@@ -1276,6 +1283,13 @@ export default function App() {
           const markShareable = (item) => {
             saveCheck({ ...checklist, items: checklist.items.map(i => i.id === item.id ? { ...i, shareable: true } : i) })
           }
+          const renameItem = (item, newText) => {
+            const text = newText.trim()
+            if (!text || text === item.text) return
+            saveCheck({ ...checklist, items: checklist.items.map(i => i.id === item.id ? { ...i, text } : i) })
+            const itemSlots = getItemSlots(item.id)
+            if (itemSlots.length > 0) saveSlots(slots.map(s => s.itemId === item.id ? { ...s, title: text } : s))
+          }
           const setItemSlotCapacity = (slot, capacity) => {
             const cap = Math.max(1, Number(capacity) || 1)
             if (cap < slot.members.length) { showAlert(`La capacité ne peut pas être inférieure au nombre d'inscrits (${slot.members.length}).`); return }
@@ -1447,7 +1461,11 @@ export default function App() {
                             <button onClick={() => moveItem(item.id, 1)} disabled={itemIdx === catItems.length - 1} title="Descendre" style={{ background: 'none', border: 'none', color: itemIdx === catItems.length - 1 ? 'var(--border)' : 'var(--muted)', cursor: itemIdx === catItems.length - 1 ? 'default' : 'pointer', fontSize: '.6rem', lineHeight: 1, padding: '1px' }}>▼</button>
                           </div>
                           <input type="checkbox" checked={isChecked} disabled={isReadOnly} onChange={() => toggleItem(item.id)} style={{ accentColor: 'var(--amber)', cursor: isReadOnly ? 'default' : 'pointer', flexShrink: 0 }} />
-                          <div style={{ flex: 1, fontSize: '.8rem', color: isChecked ? 'var(--muted)' : 'var(--bone)', textDecoration: isChecked ? 'line-through' : 'none' }}>{item.text}</div>
+                          {editingItemId === item.id ? (
+                            <input autoFocus defaultValue={item.text} onBlur={e => { renameItem(item, e.target.value); setEditingItemId(null) }} onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditingItemId(null) }} style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--amber)', borderRadius: '3px', padding: '.15rem .4rem', color: 'var(--bone)', fontSize: '.8rem', minWidth: 0 }} />
+                          ) : (
+                            <div onClick={() => !isReadOnly && setEditingItemId(item.id)} title="Cliquer pour renommer" style={{ flex: 1, fontSize: '.8rem', color: isChecked ? 'var(--muted)' : 'var(--bone)', textDecoration: isChecked ? 'line-through' : 'none', cursor: isReadOnly ? 'default' : 'text' }}>{item.text}</div>
+                          )}
                           <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
                             {othersWhoChecked.map(m => (
                               <span key={m.name} title={m.name} style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(196,149,106,.2)', color: 'var(--amber)', fontSize: '.55rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1566,8 +1584,12 @@ export default function App() {
               return (
                 <div key={slot.id} className="ag-card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.6rem', flexWrap: 'wrap' }}>
-                    <div>
-                      <div className="ag-name">{slot.title}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {editingSlotId === slot.id ? (
+                        <input autoFocus defaultValue={slot.title} onBlur={e => { renameSlot(slot, e.target.value); setEditingSlotId(null) }} onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditingSlotId(null) }} style={{ background: 'var(--bg)', border: '1px solid var(--amber)', borderRadius: '3px', padding: '.2rem .4rem', color: 'var(--bone)', fontSize: '.95rem', fontFamily: "'Playfair Display',serif", width: '100%' }} />
+                      ) : (
+                        <div className="ag-name" onClick={() => !slot.itemId && setEditingSlotId(slot.id)} title={slot.itemId ? undefined : 'Cliquer pour renommer'} style={{ cursor: slot.itemId ? 'default' : 'text' }}>{slot.title}</div>
+                      )}
                       {linkedItem && <div style={{ fontSize: '.68rem', color: 'var(--muted)', marginTop: '.15rem' }}>🔗 rattaché à l'item checklist «{linkedItem.text}»</div>}
                     </div>
                     <span className={`bdg ${cls}`}>{label} · {slot.members.length}/{slot.capacity}</span>
