@@ -56,6 +56,9 @@ Découpage des tâches pour reprendre avec Claude Code. Pas de code ici, juste l
 
 ## Phase 3 — Système générique de "slots" (le gros morceau)
 
+### Phase 3a — Couche de données + onglet Orga autonome ✅ Fait
+`src/slots.js` (logique pure : createSlot/getSlotStatus/canJoin/joinSlot/leaveSlot), store `kg-slots`, nouvel onglet "🧩 Orga" avec création de slot libre, inscription/désinscription, suppression (confirm-gated via la modale maison), indicateur couvert/partiel/complet coloré. US 3.2 couverte. US 3.1 (rattachement checklist) = Phase 3b, pas encore fait.
+
 ### Le principe de base (l'entité "slot")
 
 Un **slot** est une entité indépendante, autonome, qui n'a pas besoin d'un item de checklist pour exister :

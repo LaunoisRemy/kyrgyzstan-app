@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { kvGet, kvSet, kvSubscribe } from './supabase.js'
 import { getCurrentUser, setCurrentUser, clearCurrentUser } from './identity.js'
+import { createSlot, getSlotStatus, canJoin, joinSlot, leaveSlot } from './slots.js'
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -191,6 +192,8 @@ const CSS = `
   .bdg-h{background:var(--horsed);color:var(--horsel);border:1px solid rgba(155,101,52,.28)}
   .bdg-l{background:var(--laked);color:var(--lakel);border:1px solid rgba(45,95,138,.28)}
   .bdg-g{background:rgba(76,175,122,.12);color:var(--green);border:1px solid rgba(76,175,122,.25)}
+  .bdg-r{background:rgba(192,57,27,.12);color:var(--red);border:1px solid rgba(192,57,27,.3)}
+  .bdg-am{background:var(--amberd);color:var(--amberl);border:1px solid rgba(212,146,28,.3)}
 
   .tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:1.8rem;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
   .tab{padding:.6rem 1.1rem;font-size:.79rem;font-weight:500;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:'DM Sans',sans-serif;white-space:nowrap}
@@ -513,6 +516,9 @@ export default function App() {
   const [newCatIcon, setNewCatIcon] = useState('')
   const [backups, setBackups] = useState([])
   const [newBackupName, setNewBackupName] = useState('')
+  const [slots, setSlots] = useState([])
+  const [newSlotTitle, setNewSlotTitle] = useState('')
+  const [newSlotCapacity, setNewSlotCapacity] = useState(1)
   const flashTimer = useRef(null)
   const dayEditorRef = useRef(null)
   const [countdown, setCountdown] = useState(null)
@@ -551,7 +557,7 @@ export default function App() {
   // ── Load all data from Supabase on mount ──
   useEffect(() => {
     async function load() {
-      const [itin, ctcts, notes, pts, cl, cats, bks] = await Promise.all([
+      const [itin, ctcts, notes, pts, cl, cats, bks, slts] = await Promise.all([
         kvGet('kg-itin'),
         kvGet('kg-contacts'),
         kvGet('kg-notes'),
@@ -559,6 +565,7 @@ export default function App() {
         kvGet('kg-checklist'),
         kvGet('kg-checklist-cats'),
         kvGet('kg-checklist-backups'),
+        kvGet('kg-slots'),
       ])
       if (itin) setItinerary(itin)
       if (ctcts) setContacts(ctcts)
@@ -567,6 +574,7 @@ export default function App() {
       if (cl) setChecklist(cl)
       if (cats) setChecklistCats(cats)
       if (bks) setBackups(bks)
+      if (slts) setSlots(slts)
       setLoaded(true)
     }
     load()
@@ -578,6 +586,7 @@ export default function App() {
     const s4 = kvSubscribe('kg-mappoints', (val) => { if (val) setMapPoints(sortPoints(val)) })
     const s5 = kvSubscribe('kg-checklist', (val) => { if (val) setChecklist(val) })
     const s6 = kvSubscribe('kg-checklist-cats', (val) => { if (val) setChecklistCats(val) })
+    const s7 = kvSubscribe('kg-slots', (val) => { if (val) setSlots(val) })
 
     return () => {
       s1.unsubscribe()
@@ -586,6 +595,7 @@ export default function App() {
       s4.unsubscribe()
       s5.unsubscribe()
       s6.unsubscribe()
+      s7.unsubscribe()
     }
   }, [])
 
@@ -753,7 +763,7 @@ export default function App() {
 
         {/* Tabs */}
         <div className="tabs">
-          {[['itinerary', '📅 Itinéraire'], ['overview', '✈ Vols'], ['agencies', '🐎 Agences'], ['map', '🗺 Carte'], ['contacts', '👥 Groupe'], ['matos', '✅ Checklist'], ['notes', '💬 Notes']].map(([id, l]) => (
+          {[['itinerary', '📅 Itinéraire'], ['overview', '✈ Vols'], ['agencies', '🐎 Agences'], ['map', '🗺 Carte'], ['contacts', '👥 Groupe'], ['matos', '✅ Checklist'], ['orga', '🧩 Orga'], ['notes', '💬 Notes']].map(([id, l]) => (
             <button key={id} className={`tab ${tab === id ? 'on' : ''}`} onClick={() => setTab(id)}>{l}</button>
           ))}
         </div>
@@ -1368,6 +1378,93 @@ export default function App() {
                 ))}
               </div>
             )}
+          </>
+          )
+        })()}
+
+        {/* ══ ORGA ══ */}
+        {tab === 'orga' && (() => {
+          const saveSlots = (next) => { setSlots(next); kvSet('kg-slots', next) }
+          const addSlot = () => {
+            if (!newSlotTitle.trim()) return
+            const slot = createSlot({ title: newSlotTitle.trim(), capacity: Math.max(1, Number(newSlotCapacity) || 1), createdBy: currentUser })
+            saveSlots([slot, ...slots])
+            setNewSlotTitle('')
+            setNewSlotCapacity(1)
+          }
+          const toggleJoin = (slot) => {
+            const next = slot.members.includes(currentUser) ? leaveSlot(slot, currentUser) : joinSlot(slot, currentUser)
+            saveSlots(slots.map(s => s.id === slot.id ? next : s))
+          }
+          const removeMember = (slot, name) => {
+            askConfirm(`Retirer ${name} de "${slot.title}" ?`, () => {
+              saveSlots(slots.map(s => s.id === slot.id ? leaveSlot(s, name) : s))
+            })
+          }
+          const deleteSlot = (slot) => {
+            const suffix = slot.members.length > 0 ? ` (${slot.members.length} inscrit${slot.members.length > 1 ? 's' : ''})` : ''
+            askConfirm(`Supprimer le slot "${slot.title}"${suffix} ?`, () => {
+              saveSlots(slots.filter(s => s.id !== slot.id))
+            }, { danger: true })
+          }
+          const statusInfo = {
+            uncovered: { label: 'Pas couvert', cls: 'bdg-r' },
+            partial: { label: 'Partiellement couvert', cls: 'bdg-am' },
+            full: { label: 'Complet', cls: 'bdg-g' },
+          }
+          const visibleSlots = slots.filter(s => !s.itemId || s.showInOrga).slice().sort((a, b) => b.id - a.id)
+          const inputStyle = { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.4rem .6rem', color: 'var(--bone)', fontSize: '.8rem' }
+
+          return (
+          <>
+            <div className="slbl">🧩 Orga — Logement, transport & coordination</div>
+            <p style={{ fontSize: '.74rem', color: 'var(--muted)', marginBottom: '.8rem' }}>Créez un besoin (hébergement, covoiturage…) avec une capacité — les autres s'inscrivent tant qu'il reste de la place.</p>
+
+            <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap' }}>
+              <input value={newSlotTitle} onChange={e => setNewSlotTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSlot()} placeholder="ex: Logement Rémy — mardi soir…" style={{ ...inputStyle, flex: '1 1 220px', minWidth: 0 }} />
+              <input type="number" min="1" value={newSlotCapacity} onChange={e => setNewSlotCapacity(e.target.value)} style={{ ...inputStyle, flex: '0 0 auto', width: '70px' }} title="Capacité" />
+              <button onClick={addSlot} disabled={!newSlotTitle.trim()} style={{ padding: '.4rem .7rem', background: newSlotTitle.trim() ? 'rgba(196,149,106,.15)' : 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: newSlotTitle.trim() ? 'var(--amber)' : 'var(--muted)', cursor: newSlotTitle.trim() ? 'pointer' : 'default', fontSize: '.82rem' }}>+ Créer un slot</button>
+            </div>
+
+            {visibleSlots.length === 0 && (
+              <p style={{ fontSize: '.8rem', color: 'var(--muted)', fontStyle: 'italic' }}>Aucun slot pour l'instant.</p>
+            )}
+
+            {visibleSlots.map(slot => {
+              const status = getSlotStatus(slot)
+              const { label, cls } = statusInfo[status]
+              const joined = slot.members.includes(currentUser)
+              const linkedItem = slot.itemId ? checklist.items.find(i => i.id === slot.itemId) : null
+              return (
+                <div key={slot.id} className="ag-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.6rem', flexWrap: 'wrap' }}>
+                    <div>
+                      <div className="ag-name">{slot.title}</div>
+                      {linkedItem && <div style={{ fontSize: '.68rem', color: 'var(--muted)', marginTop: '.15rem' }}>🔗 rattaché à l'item checklist «{linkedItem.text}»</div>}
+                    </div>
+                    <span className={`bdg ${cls}`}>{label} · {slot.members.length}/{slot.capacity}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '.35rem', flexWrap: 'wrap', margin: '.6rem 0' }}>
+                    {slot.members.map(name => (
+                      <span key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.74rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.2rem .5rem' }}>
+                        {name}
+                        {name !== currentUser && <button onClick={() => removeMember(slot, name)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.68rem', padding: 0 }} title={`Retirer ${name}`}>✕</button>}
+                      </span>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '.5rem' }}>
+                    <span style={{ fontSize: '.68rem', color: 'var(--muted)' }}>Créé par {slot.createdBy}</span>
+                    <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
+                      <button onClick={() => toggleJoin(slot)} disabled={!joined && !canJoin(slot, currentUser)}
+                        style={{ fontSize: '.74rem', padding: '.3rem .6rem', background: joined ? 'var(--bg)' : (canJoin(slot, currentUser) ? 'rgba(76,175,122,.12)' : 'var(--bg)'), border: `1px solid ${joined ? 'var(--border)' : 'rgba(76,175,122,.3)'}`, borderRadius: '3px', color: joined ? 'var(--muted)' : (canJoin(slot, currentUser) ? 'var(--green)' : 'var(--muted)'), cursor: (!joined && !canJoin(slot, currentUser)) ? 'default' : 'pointer' }}>
+                        {joined ? 'Se retirer' : (canJoin(slot, currentUser) ? "S'inscrire" : 'Complet')}
+                      </button>
+                      {!slot.itemId && <button onClick={() => deleteSlot(slot)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.7rem', opacity: .5 }} title="Supprimer">✕</button>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </>
           )
         })()}
