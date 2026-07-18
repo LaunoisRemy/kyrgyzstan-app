@@ -519,6 +519,7 @@ export default function App() {
   const [slots, setSlots] = useState([])
   const [newSlotTitle, setNewSlotTitle] = useState('')
   const [newSlotCapacity, setNewSlotCapacity] = useState(1)
+  const [expandedSlotItem, setExpandedSlotItem] = useState(null)
   const flashTimer = useRef(null)
   const dayEditorRef = useRef(null)
   const [countdown, setCountdown] = useState(null)
@@ -526,6 +527,24 @@ export default function App() {
   const [dialog, setDialog] = useState(null)
   const askConfirm = (message, onConfirm, opts = {}) => setDialog({ message, onConfirm, ...opts })
   const showAlert = (message) => setDialog({ message, alertOnly: true })
+
+  // ── Slots (shared between the Orga tab and checklist item attachment) ──
+  const saveSlots = (next) => { setSlots(next); kvSet('kg-slots', next) }
+  const toggleJoinSlot = (slot) => {
+    const next = slot.members.includes(currentUser) ? leaveSlot(slot, currentUser) : joinSlot(slot, currentUser)
+    saveSlots(slots.map(s => s.id === slot.id ? next : s))
+  }
+  const removeSlotMember = (slot, name) => {
+    askConfirm(`Retirer ${name} de "${slot.title}" ?`, () => {
+      saveSlots(slots.map(s => s.id === slot.id ? leaveSlot(s, name) : s))
+    })
+  }
+  const deleteSlotById = (slot) => {
+    const suffix = slot.members.length > 0 ? ` (${slot.members.length} inscrit${slot.members.length > 1 ? 's' : ''})` : ''
+    askConfirm(`Supprimer le slot "${slot.title}"${suffix} ?`, () => {
+      saveSlots(slots.filter(s => s.id !== slot.id))
+    }, { danger: true })
+  }
 
   function chooseUser(name) {
     setCurrentUser(name)
@@ -1221,7 +1240,30 @@ export default function App() {
                 newChecked[name] = arr.filter(id => id !== itemId)
               }
               saveCheck({ items: checklist.items.filter(i => i.id !== itemId), checked: newChecked })
+              if (item?.slotId) saveSlots(slots.filter(s => s.id !== item.slotId))
             }, { danger: true })
+          }
+          const getSlotForItem = (itemId) => slots.find(s => s.itemId === itemId)
+          const shareItem = (item) => {
+            const slot = createSlot({ title: item.text, capacity: 2, createdBy: currentUser, itemId: item.id })
+            saveSlots([slot, ...slots])
+            saveCheck({ ...checklist, items: checklist.items.map(i => i.id === item.id ? { ...i, slotId: slot.id } : i) })
+            setExpandedSlotItem(item.id)
+          }
+          const unshareItem = (item, slot) => {
+            const suffix = slot.members.length > 0 ? ` (${slot.members.length} inscrit${slot.members.length > 1 ? 's' : ''})` : ''
+            askConfirm(`Retirer le partage de "${item.text}"${suffix} ?`, () => {
+              saveSlots(slots.filter(s => s.id !== slot.id))
+              saveCheck({ ...checklist, items: checklist.items.map(i => i.id === item.id ? { ...i, slotId: null } : i) })
+            }, { danger: true })
+          }
+          const setSlotCapacity = (slot, capacity) => {
+            const cap = Math.max(1, Number(capacity) || 1)
+            if (cap < slot.members.length) { showAlert(`La capacité ne peut pas être inférieure au nombre d'inscrits (${slot.members.length}).`); return }
+            saveSlots(slots.map(s => s.id === slot.id ? { ...s, capacity: cap } : s))
+          }
+          const toggleShowInOrga = (slot) => {
+            saveSlots(slots.map(s => s.id === slot.id ? { ...s, showInOrga: !s.showInOrga } : s))
           }
           const moveItem = (itemId, dir) => {
             const item = checklist.items.find(i => i.id === itemId)
@@ -1241,7 +1283,7 @@ export default function App() {
           const MAX_BACKUPS = 10
           const backupChecklist = () => {
             const name = newBackupName.trim() || `Sauvegarde du ${new Date().toLocaleDateString('fr-FR')}`
-            const entry = { id: Date.now(), name, date: new Date().toISOString(), items: checklist.items }
+            const entry = { id: Date.now(), name, date: new Date().toISOString(), items: checklist.items.map(({ slotId, ...rest }) => rest) }
             const next = [entry, ...backups].slice(0, MAX_BACKUPS)
             setBackups(next)
             kvSet('kg-checklist-backups', next)
@@ -1314,25 +1356,65 @@ export default function App() {
                   {catItems.map((item, itemIdx) => {
                     const isChecked = userChecked.includes(item.id)
                     const othersWhoChecked = TRIP.members.filter(m => m.name !== viewing && (checklist.checked[m.name] || []).includes(item.id))
+                    const slot = getSlotForItem(item.id)
+                    const isExpanded = expandedSlotItem === item.id
+                    const slotCls = slot ? (slot.members.length >= slot.capacity ? 'bdg-g' : slot.members.length > 0 ? 'bdg-am' : 'bdg-r') : ''
                     return (
-                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.35rem .4rem', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-                          <button onClick={() => moveItem(item.id, -1)} disabled={itemIdx === 0} title="Monter" style={{ background: 'none', border: 'none', color: itemIdx === 0 ? 'var(--border)' : 'var(--muted)', cursor: itemIdx === 0 ? 'default' : 'pointer', fontSize: '.6rem', lineHeight: 1, padding: '1px' }}>▲</button>
-                          <button onClick={() => moveItem(item.id, 1)} disabled={itemIdx === catItems.length - 1} title="Descendre" style={{ background: 'none', border: 'none', color: itemIdx === catItems.length - 1 ? 'var(--border)' : 'var(--muted)', cursor: itemIdx === catItems.length - 1 ? 'default' : 'pointer', fontSize: '.6rem', lineHeight: 1, padding: '1px' }}>▼</button>
+                      <div key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.35rem .4rem' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+                            <button onClick={() => moveItem(item.id, -1)} disabled={itemIdx === 0} title="Monter" style={{ background: 'none', border: 'none', color: itemIdx === 0 ? 'var(--border)' : 'var(--muted)', cursor: itemIdx === 0 ? 'default' : 'pointer', fontSize: '.6rem', lineHeight: 1, padding: '1px' }}>▲</button>
+                            <button onClick={() => moveItem(item.id, 1)} disabled={itemIdx === catItems.length - 1} title="Descendre" style={{ background: 'none', border: 'none', color: itemIdx === catItems.length - 1 ? 'var(--border)' : 'var(--muted)', cursor: itemIdx === catItems.length - 1 ? 'default' : 'pointer', fontSize: '.6rem', lineHeight: 1, padding: '1px' }}>▼</button>
+                          </div>
+                          <input type="checkbox" checked={isChecked} disabled={isReadOnly} onChange={() => toggleItem(item.id)} style={{ accentColor: 'var(--amber)', cursor: isReadOnly ? 'default' : 'pointer', flexShrink: 0 }} />
+                          <div style={{ flex: 1, fontSize: '.8rem', color: isChecked ? 'var(--muted)' : 'var(--bone)', textDecoration: isChecked ? 'line-through' : 'none' }}>{item.text}</div>
+                          <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                            {othersWhoChecked.map(m => (
+                              <span key={m.name} title={m.name} style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(196,149,106,.2)', color: 'var(--amber)', fontSize: '.55rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {m.name.split(' ').map(w => w[0]).join('')}
+                              </span>
+                            ))}
+                          </div>
+                          {slot ? (
+                            <button onClick={() => setExpandedSlotItem(isExpanded ? null : item.id)} className={`bdg ${slotCls}`} style={{ flexShrink: 0, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
+                              👥 {slot.members.length}/{slot.capacity}
+                            </button>
+                          ) : (
+                            <button onClick={() => shareItem(item)} title="Rendre partageable" style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.75rem', opacity: .5, flexShrink: 0 }}>👥</button>
+                          )}
+                          <select value={item.cat} onChange={e => changeItemCat(item.id, e.target.value)} title="Déplacer vers une autre catégorie" style={{ flexShrink: 0, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--muted)', fontSize: '.68rem', padding: '.15rem 1.3rem .15rem .35rem', width: '128px' }}>
+                            {checklistCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.id}</option>)}
+                          </select>
+                          <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.7rem', padding: '2px 4px', opacity: .5 }} title="Supprimer pour tout le monde">✕</button>
                         </div>
-                        <input type="checkbox" checked={isChecked} disabled={isReadOnly} onChange={() => toggleItem(item.id)} style={{ accentColor: 'var(--amber)', cursor: isReadOnly ? 'default' : 'pointer', flexShrink: 0 }} />
-                        <div style={{ flex: 1, fontSize: '.8rem', color: isChecked ? 'var(--muted)' : 'var(--bone)', textDecoration: isChecked ? 'line-through' : 'none' }}>{item.text}</div>
-                        <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
-                          {othersWhoChecked.map(m => (
-                            <span key={m.name} title={m.name} style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(196,149,106,.2)', color: 'var(--amber)', fontSize: '.55rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {m.name.split(' ').map(w => w[0]).join('')}
-                            </span>
-                          ))}
-                        </div>
-                        <select value={item.cat} onChange={e => changeItemCat(item.id, e.target.value)} title="Déplacer vers une autre catégorie" style={{ flexShrink: 0, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--muted)', fontSize: '.68rem', padding: '.15rem 1.3rem .15rem .35rem', width: '128px' }}>
-                          {checklistCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.id}</option>)}
-                        </select>
-                        <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.7rem', padding: '2px 4px', opacity: .5 }} title="Supprimer pour tout le monde">✕</button>
+                        {isExpanded && slot && (
+                          <div style={{ margin: '0 .4rem .6rem 2.2rem', padding: '.5rem .6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', fontSize: '.74rem' }}>
+                            <div style={{ display: 'flex', gap: '.35rem', flexWrap: 'wrap', marginBottom: '.5rem' }}>
+                              {slot.members.length === 0 && <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Personne inscrit pour l'instant.</span>}
+                              {slot.members.map(name => (
+                                <span key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.15rem .4rem' }}>
+                                  {name}
+                                  {name !== currentUser && <button onClick={() => removeSlotMember(slot, name)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.65rem', padding: 0 }} title={`Retirer ${name}`}>✕</button>}
+                                </span>
+                              ))}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap' }}>
+                              <button onClick={() => toggleJoinSlot(slot)} disabled={!slot.members.includes(currentUser) && !canJoin(slot, currentUser)}
+                                style={{ fontSize: '.7rem', padding: '.25rem .5rem', background: slot.members.includes(currentUser) ? 'var(--bg2)' : (canJoin(slot, currentUser) ? 'rgba(76,175,122,.12)' : 'var(--bg2)'), border: `1px solid ${slot.members.includes(currentUser) ? 'var(--border)' : 'rgba(76,175,122,.3)'}`, borderRadius: '3px', color: slot.members.includes(currentUser) ? 'var(--muted)' : (canJoin(slot, currentUser) ? 'var(--green)' : 'var(--muted)'), cursor: (!slot.members.includes(currentUser) && !canJoin(slot, currentUser)) ? 'default' : 'pointer' }}>
+                                {slot.members.includes(currentUser) ? 'Se retirer' : (canJoin(slot, currentUser) ? "S'inscrire" : 'Complet')}
+                              </button>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '.3rem', color: 'var(--muted)' }}>
+                                Capacité
+                                <input type="number" min="1" defaultValue={slot.capacity} onBlur={e => setSlotCapacity(slot, e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} style={{ width: '48px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--bone)', fontSize: '.72rem', padding: '.15rem .3rem' }} />
+                              </label>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '.3rem', color: 'var(--muted)', cursor: 'pointer' }}>
+                                <input type="checkbox" checked={slot.showInOrga} onChange={() => toggleShowInOrga(slot)} style={{ accentColor: 'var(--amber)' }} />
+                                Afficher dans Orga
+                              </label>
+                              <button onClick={() => unshareItem(item, slot)} style={{ marginLeft: 'auto', fontSize: '.7rem', padding: '.25rem .5rem', background: 'none', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--muted)', cursor: 'pointer' }}>Retirer le partage</button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -1384,28 +1466,12 @@ export default function App() {
 
         {/* ══ ORGA ══ */}
         {tab === 'orga' && (() => {
-          const saveSlots = (next) => { setSlots(next); kvSet('kg-slots', next) }
           const addSlot = () => {
             if (!newSlotTitle.trim()) return
             const slot = createSlot({ title: newSlotTitle.trim(), capacity: Math.max(1, Number(newSlotCapacity) || 1), createdBy: currentUser })
             saveSlots([slot, ...slots])
             setNewSlotTitle('')
             setNewSlotCapacity(1)
-          }
-          const toggleJoin = (slot) => {
-            const next = slot.members.includes(currentUser) ? leaveSlot(slot, currentUser) : joinSlot(slot, currentUser)
-            saveSlots(slots.map(s => s.id === slot.id ? next : s))
-          }
-          const removeMember = (slot, name) => {
-            askConfirm(`Retirer ${name} de "${slot.title}" ?`, () => {
-              saveSlots(slots.map(s => s.id === slot.id ? leaveSlot(s, name) : s))
-            })
-          }
-          const deleteSlot = (slot) => {
-            const suffix = slot.members.length > 0 ? ` (${slot.members.length} inscrit${slot.members.length > 1 ? 's' : ''})` : ''
-            askConfirm(`Supprimer le slot "${slot.title}"${suffix} ?`, () => {
-              saveSlots(slots.filter(s => s.id !== slot.id))
-            }, { danger: true })
           }
           const statusInfo = {
             uncovered: { label: 'Pas couvert', cls: 'bdg-r' },
@@ -1448,18 +1514,18 @@ export default function App() {
                     {slot.members.map(name => (
                       <span key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.74rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.2rem .5rem' }}>
                         {name}
-                        {name !== currentUser && <button onClick={() => removeMember(slot, name)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.68rem', padding: 0 }} title={`Retirer ${name}`}>✕</button>}
+                        {name !== currentUser && <button onClick={() => removeSlotMember(slot, name)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.68rem', padding: 0 }} title={`Retirer ${name}`}>✕</button>}
                       </span>
                     ))}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '.5rem' }}>
                     <span style={{ fontSize: '.68rem', color: 'var(--muted)' }}>Créé par {slot.createdBy}</span>
                     <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
-                      <button onClick={() => toggleJoin(slot)} disabled={!joined && !canJoin(slot, currentUser)}
+                      <button onClick={() => toggleJoinSlot(slot)} disabled={!joined && !canJoin(slot, currentUser)}
                         style={{ fontSize: '.74rem', padding: '.3rem .6rem', background: joined ? 'var(--bg)' : (canJoin(slot, currentUser) ? 'rgba(76,175,122,.12)' : 'var(--bg)'), border: `1px solid ${joined ? 'var(--border)' : 'rgba(76,175,122,.3)'}`, borderRadius: '3px', color: joined ? 'var(--muted)' : (canJoin(slot, currentUser) ? 'var(--green)' : 'var(--muted)'), cursor: (!joined && !canJoin(slot, currentUser)) ? 'default' : 'pointer' }}>
                         {joined ? 'Se retirer' : (canJoin(slot, currentUser) ? "S'inscrire" : 'Complet')}
                       </button>
-                      {!slot.itemId && <button onClick={() => deleteSlot(slot)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.7rem', opacity: .5 }} title="Supprimer">✕</button>}
+                      {!slot.itemId && <button onClick={() => deleteSlotById(slot)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.7rem', opacity: .5 }} title="Supprimer">✕</button>}
                     </div>
                   </div>
                 </div>

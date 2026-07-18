@@ -57,7 +57,10 @@ Découpage des tâches pour reprendre avec Claude Code. Pas de code ici, juste l
 ## Phase 3 — Système générique de "slots" (le gros morceau)
 
 ### Phase 3a — Couche de données + onglet Orga autonome ✅ Fait
-`src/slots.js` (logique pure : createSlot/getSlotStatus/canJoin/joinSlot/leaveSlot), store `kg-slots`, nouvel onglet "🧩 Orga" avec création de slot libre, inscription/désinscription, suppression (confirm-gated via la modale maison), indicateur couvert/partiel/complet coloré. US 3.2 couverte. US 3.1 (rattachement checklist) = Phase 3b, pas encore fait.
+`src/slots.js` (logique pure : createSlot/getSlotStatus/canJoin/joinSlot/leaveSlot), store `kg-slots`, nouvel onglet "🧩 Orga" avec création de slot libre, inscription/désinscription, suppression (confirm-gated via la modale maison), indicateur couvert/partiel/complet coloré. US 3.2 couverte.
+
+### Phase 3b — Rattachement checklist ✅ Fait
+Bouton 👥 sur chaque item de checklist : premier clic crée un slot rattaché (capacité 2 par défaut) et ouvre une sous-ligne repliable (inscrits, S'inscrire/Se retirer, capacité ajustable, case "Afficher dans Orga"). Suppression d'un item cascade sur son slot. Sauvegardes nommées de checklist retirent le lien `slotId` au moment du snapshot (jamais de lien mort resurgi à la restauration). Testé en live : synchro bidirectionnelle Checklist ↔ Orga confirmée. US 3.1 couverte — Phase 3 complète.
 
 ### Le principe de base (l'entité "slot")
 
