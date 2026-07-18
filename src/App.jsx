@@ -514,6 +514,7 @@ export default function App() {
   const [viewedChecklistUser, setViewedChecklistUser] = useState(null)
   const [newItemText, setNewItemText] = useState('')
   const [newItemCat, setNewItemCat] = useState('Équipement')
+  const [newItemShareable, setNewItemShareable] = useState(false)
   const [newCatName, setNewCatName] = useState('')
   const [newCatIcon, setNewCatIcon] = useState('')
   const [backups, setBackups] = useState([])
@@ -1222,17 +1223,44 @@ export default function App() {
           const viewing = viewedChecklistUser || currentUser
           const isReadOnly = viewing !== currentUser
           const saveCheck = (data) => { setChecklist(data); kvSet('kg-checklist', data) }
+          const getItemSlots = (itemId) => slots.filter(s => s.itemId === itemId)
+          const isItemShareable = (item) => item.shareable || getItemSlots(item.id).length > 0
           const toggleItem = (itemId) => {
             if (isReadOnly) return
+            const item = checklist.items.find(i => i.id === itemId)
             const arr = checklist.checked[currentUser] || []
-            const next = arr.includes(itemId) ? arr.filter(id => id !== itemId) : [...arr, itemId]
-            saveCheck({ ...checklist, checked: { ...checklist.checked, [currentUser]: next } })
+            const wasChecked = arr.includes(itemId)
+            const next = wasChecked ? arr.filter(id => id !== itemId) : [...arr, itemId]
+            const commit = () => saveCheck({ ...checklist, checked: { ...checklist.checked, [currentUser]: next } })
+            if (!isItemShareable(item)) { commit(); return }
+            const mySlot = getItemSlots(itemId).find(s => s.createdBy === currentUser)
+            if (!wasChecked) {
+              if (!mySlot) {
+                const slot = joinSlot(createSlot({ title: item.text, capacity: 2, createdBy: currentUser, itemId }), currentUser)
+                saveSlots([slot, ...slots])
+              }
+              commit()
+            } else if (mySlot) {
+              const others = mySlot.members.filter(m => m !== currentUser)
+              if (others.length > 0) {
+                askConfirm(`Retirer ton partage de "${item.text}" ? ${others.join(', ')} perdra${others.length > 1 ? 'ont' : ''} son inscription.`, () => {
+                  saveSlots(slots.filter(s => s.id !== mySlot.id))
+                  commit()
+                }, { danger: true })
+              } else {
+                saveSlots(slots.filter(s => s.id !== mySlot.id))
+                commit()
+              }
+            } else {
+              commit()
+            }
           }
           const addItem = () => {
             if (!newItemText.trim()) return
             const nextId = Math.max(0, ...checklist.items.map(i => i.id)) + 1
-            saveCheck({ ...checklist, items: [...checklist.items, { id: nextId, text: newItemText.trim(), cat: newItemCat }] })
+            saveCheck({ ...checklist, items: [...checklist.items, { id: nextId, text: newItemText.trim(), cat: newItemCat, shareable: newItemShareable }] })
             setNewItemText('')
+            setNewItemShareable(false)
           }
           const removeItem = (itemId) => {
             const item = checklist.items.find(i => i.id === itemId)
@@ -1242,24 +1270,13 @@ export default function App() {
                 newChecked[name] = arr.filter(id => id !== itemId)
               }
               saveCheck({ items: checklist.items.filter(i => i.id !== itemId), checked: newChecked })
-              if (item?.slotId) saveSlots(slots.filter(s => s.id !== item.slotId))
+              saveSlots(slots.filter(s => s.itemId !== itemId))
             }, { danger: true })
           }
-          const getSlotForItem = (itemId) => slots.find(s => s.itemId === itemId)
-          const shareItem = (item) => {
-            const slot = createSlot({ title: item.text, capacity: 2, createdBy: currentUser, itemId: item.id })
-            saveSlots([slot, ...slots])
-            saveCheck({ ...checklist, items: checklist.items.map(i => i.id === item.id ? { ...i, slotId: slot.id } : i) })
-            setExpandedSlotItem(item.id)
+          const markShareable = (item) => {
+            saveCheck({ ...checklist, items: checklist.items.map(i => i.id === item.id ? { ...i, shareable: true } : i) })
           }
-          const unshareItem = (item, slot) => {
-            const suffix = slot.members.length > 0 ? ` (${slot.members.length} inscrit${slot.members.length > 1 ? 's' : ''})` : ''
-            askConfirm(`Retirer le partage de "${item.text}"${suffix} ?`, () => {
-              saveSlots(slots.filter(s => s.id !== slot.id))
-              saveCheck({ ...checklist, items: checklist.items.map(i => i.id === item.id ? { ...i, slotId: null } : i) })
-            }, { danger: true })
-          }
-          const setSlotCapacity = (slot, capacity) => {
+          const setItemSlotCapacity = (slot, capacity) => {
             const cap = Math.max(1, Number(capacity) || 1)
             if (cap < slot.members.length) { showAlert(`La capacité ne peut pas être inférieure au nombre d'inscrits (${slot.members.length}).`); return }
             saveSlots(slots.map(s => s.id === slot.id ? { ...s, capacity: cap } : s))
@@ -1285,7 +1302,7 @@ export default function App() {
           const MAX_BACKUPS = 10
           const backupChecklist = () => {
             const name = newBackupName.trim() || `Sauvegarde du ${new Date().toLocaleDateString('fr-FR')}`
-            const entry = { id: Date.now(), name, date: new Date().toISOString(), items: checklist.items.map(({ slotId, ...rest }) => rest) }
+            const entry = { id: Date.now(), name, date: new Date().toISOString(), items: checklist.items }
             const next = [entry, ...backups].slice(0, MAX_BACKUPS)
             setBackups(next)
             kvSet('kg-checklist-backups', next)
@@ -1324,6 +1341,50 @@ export default function App() {
           const checkedCount = userChecked.length
           const pct = totalItems > 0 ? Math.round((checkedCount / totalItems) * 100) : 0
           const inputStyle = { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.4rem .6rem', color: 'var(--bone)', fontSize: '.8rem' }
+          const shareableItems = checklist.items.filter(isItemShareable)
+
+          const renderSlotCard = (slot, item) => {
+            const status = getSlotStatus(slot)
+            const cls = status === 'full' ? 'bdg-g' : status === 'partial' ? 'bdg-am' : 'bdg-r'
+            const label = status === 'full' ? 'Complet' : status === 'partial' ? 'Partiel' : 'Pas couvert'
+            const joined = slot.members.includes(currentUser)
+            const isOwner = slot.createdBy === currentUser
+            return (
+              <div key={slot.id} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.5rem .6rem', marginBottom: '.4rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', flexWrap: 'wrap', marginBottom: '.4rem' }}>
+                  <span style={{ fontSize: '.76rem', color: 'var(--bone)' }}>{item.text} <span style={{ color: 'var(--muted)' }}>— {slot.createdBy}</span></span>
+                  <span className={`bdg ${cls}`}>{label} · {slot.members.length}/{slot.capacity}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '.3rem', flexWrap: 'wrap', marginBottom: '.4rem' }}>
+                  {slot.members.length === 0 && <span style={{ color: 'var(--muted)', fontStyle: 'italic', fontSize: '.72rem' }}>Personne inscrit.</span>}
+                  {slot.members.map(name => (
+                    <span key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.15rem .4rem', fontSize: '.72rem' }}>
+                      {name}
+                      {name !== currentUser && <button onClick={() => removeSlotMember(slot, name)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.65rem', padding: 0 }} title={`Retirer ${name}`}>✕</button>}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap' }}>
+                  {isOwner ? (
+                    <span style={{ fontSize: '.7rem', color: 'var(--muted)', fontStyle: 'italic' }}>Décoche "{item.text}" pour retirer ton partage</span>
+                  ) : (
+                    <button onClick={() => toggleJoinSlot(slot)} disabled={!joined && !canJoin(slot, currentUser)}
+                      style={{ fontSize: '.7rem', padding: '.25rem .5rem', background: joined ? 'var(--bg)' : (canJoin(slot, currentUser) ? 'rgba(76,175,122,.12)' : 'var(--bg)'), border: `1px solid ${joined ? 'var(--border)' : 'rgba(76,175,122,.3)'}`, borderRadius: '3px', color: joined ? 'var(--muted)' : (canJoin(slot, currentUser) ? 'var(--green)' : 'var(--muted)'), cursor: (!joined && !canJoin(slot, currentUser)) ? 'default' : 'pointer' }}>
+                      {joined ? 'Se retirer' : (canJoin(slot, currentUser) ? "S'inscrire" : 'Complet')}
+                    </button>
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '.3rem', color: 'var(--muted)', fontSize: '.72rem' }}>
+                    Capacité
+                    <input type="number" min="1" defaultValue={slot.capacity} onBlur={e => setItemSlotCapacity(slot, e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} style={{ width: '44px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--bone)', fontSize: '.72rem', padding: '.15rem .3rem' }} />
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '.3rem', color: 'var(--muted)', fontSize: '.72rem', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={slot.showInOrga} onChange={() => toggleShowInOrga(slot)} style={{ accentColor: 'var(--amber)' }} />
+                    Afficher dans Orga
+                  </label>
+                </div>
+              </div>
+            )
+          }
 
           return (
           <>
@@ -1344,6 +1405,20 @@ export default function App() {
               </div>
             </div>
 
+            {/* Objets partagés — vue d'ensemble */}
+            {shareableItems.length > 0 && (
+              <div style={{ marginBottom: '1.2rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.8rem 1rem' }}>
+                <div className="slbl" style={{ marginBottom: '.6rem' }}>🎒 Objets partagés</div>
+                {shareableItems.map(item => {
+                  const itemSlots = getItemSlots(item.id)
+                  if (itemSlots.length === 0) {
+                    return <div key={item.id} style={{ fontSize: '.76rem', color: 'var(--muted)', fontStyle: 'italic', padding: '.3rem 0' }}>{item.text} — personne ne partage encore</div>
+                  }
+                  return itemSlots.map(slot => renderSlotCard(slot, item))
+                })}
+              </div>
+            )}
+
             {/* Categories */}
             {checklistCats.map(cat => {
               const catItems = checklist.items.filter(i => i.cat === cat.id)
@@ -1358,9 +1433,12 @@ export default function App() {
                   {catItems.map((item, itemIdx) => {
                     const isChecked = userChecked.includes(item.id)
                     const othersWhoChecked = TRIP.members.filter(m => m.name !== viewing && (checklist.checked[m.name] || []).includes(item.id))
-                    const slot = getSlotForItem(item.id)
+                    const shareable = isItemShareable(item)
+                    const itemSlots = shareable ? getItemSlots(item.id) : []
                     const isExpanded = expandedSlotItem === item.id
-                    const slotCls = slot ? (slot.members.length >= slot.capacity ? 'bdg-g' : slot.members.length > 0 ? 'bdg-am' : 'bdg-r') : ''
+                    const totalMembers = itemSlots.reduce((n, s) => n + s.members.length, 0)
+                    const totalCapacity = itemSlots.reduce((n, s) => n + s.capacity, 0)
+                    const aggCls = itemSlots.length === 0 ? 'bdg-o' : (totalMembers >= totalCapacity ? 'bdg-g' : totalMembers > 0 ? 'bdg-am' : 'bdg-r')
                     return (
                       <div key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.35rem .4rem' }}>
@@ -1377,44 +1455,22 @@ export default function App() {
                               </span>
                             ))}
                           </div>
-                          {slot ? (
-                            <button onClick={() => setExpandedSlotItem(isExpanded ? null : item.id)} className={`bdg ${slotCls}`} style={{ flexShrink: 0, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
-                              👥 {slot.members.length}/{slot.capacity}
+                          {shareable ? (
+                            <button onClick={() => setExpandedSlotItem(isExpanded ? null : item.id)} className={`bdg ${aggCls}`} style={{ flexShrink: 0, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", border: itemSlots.length === 0 ? '1px solid var(--border)' : undefined }}>
+                              👥 {itemSlots.length > 0 ? `${totalMembers}/${totalCapacity}` : 'partageable'}
                             </button>
                           ) : (
-                            <button onClick={() => shareItem(item)} title="Rendre partageable" style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.75rem', opacity: .5, flexShrink: 0 }}>👥</button>
+                            <button onClick={() => markShareable(item)} title="Rendre partageable" style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.75rem', opacity: .5, flexShrink: 0 }}>👥</button>
                           )}
                           <select value={item.cat} onChange={e => changeItemCat(item.id, e.target.value)} title="Déplacer vers une autre catégorie" style={{ flexShrink: 0, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--muted)', fontSize: '.68rem', padding: '.15rem 1.3rem .15rem .35rem', width: '128px' }}>
                             {checklistCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.id}</option>)}
                           </select>
                           <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.7rem', padding: '2px 4px', opacity: .5 }} title="Supprimer pour tout le monde">✕</button>
                         </div>
-                        {isExpanded && slot && (
-                          <div style={{ margin: '0 .4rem .6rem 2.2rem', padding: '.5rem .6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', fontSize: '.74rem' }}>
-                            <div style={{ display: 'flex', gap: '.35rem', flexWrap: 'wrap', marginBottom: '.5rem' }}>
-                              {slot.members.length === 0 && <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Personne inscrit pour l'instant.</span>}
-                              {slot.members.map(name => (
-                                <span key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '3px', padding: '.15rem .4rem' }}>
-                                  {name}
-                                  {name !== currentUser && <button onClick={() => removeSlotMember(slot, name)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.65rem', padding: 0 }} title={`Retirer ${name}`}>✕</button>}
-                                </span>
-                              ))}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap' }}>
-                              <button onClick={() => toggleJoinSlot(slot)} disabled={!slot.members.includes(currentUser) && !canJoin(slot, currentUser)}
-                                style={{ fontSize: '.7rem', padding: '.25rem .5rem', background: slot.members.includes(currentUser) ? 'var(--bg2)' : (canJoin(slot, currentUser) ? 'rgba(76,175,122,.12)' : 'var(--bg2)'), border: `1px solid ${slot.members.includes(currentUser) ? 'var(--border)' : 'rgba(76,175,122,.3)'}`, borderRadius: '3px', color: slot.members.includes(currentUser) ? 'var(--muted)' : (canJoin(slot, currentUser) ? 'var(--green)' : 'var(--muted)'), cursor: (!slot.members.includes(currentUser) && !canJoin(slot, currentUser)) ? 'default' : 'pointer' }}>
-                                {slot.members.includes(currentUser) ? 'Se retirer' : (canJoin(slot, currentUser) ? "S'inscrire" : 'Complet')}
-                              </button>
-                              <label style={{ display: 'flex', alignItems: 'center', gap: '.3rem', color: 'var(--muted)' }}>
-                                Capacité
-                                <input type="number" min="1" defaultValue={slot.capacity} onBlur={e => setSlotCapacity(slot, e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} style={{ width: '48px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--bone)', fontSize: '.72rem', padding: '.15rem .3rem' }} />
-                              </label>
-                              <label style={{ display: 'flex', alignItems: 'center', gap: '.3rem', color: 'var(--muted)', cursor: 'pointer' }}>
-                                <input type="checkbox" checked={slot.showInOrga} onChange={() => toggleShowInOrga(slot)} style={{ accentColor: 'var(--amber)' }} />
-                                Afficher dans Orga
-                              </label>
-                              <button onClick={() => unshareItem(item, slot)} style={{ marginLeft: 'auto', fontSize: '.7rem', padding: '.25rem .5rem', background: 'none', border: '1px solid var(--border)', borderRadius: '3px', color: 'var(--muted)', cursor: 'pointer' }}>Retirer le partage</button>
-                            </div>
+                        {isExpanded && shareable && (
+                          <div style={{ margin: '0 .4rem .6rem 2.2rem' }}>
+                            {itemSlots.length === 0 && <p style={{ fontSize: '.72rem', color: 'var(--muted)', fontStyle: 'italic', marginBottom: '.4rem' }}>Personne ne partage encore "{item.text}". Coche la case pour créer ton partage.</p>}
+                            {itemSlots.map(slot => renderSlotCard(slot, item))}
                           </div>
                         )}
                       </div>
@@ -1431,6 +1487,10 @@ export default function App() {
                 {checklistCats.map(c => <option key={c.id} value={c.id}>{c.icon} {c.id}</option>)}
               </select>
               <button onClick={addItem} disabled={!newItemText.trim()} style={{ padding: '.4rem .7rem', background: newItemText.trim() ? 'rgba(196,149,106,.15)' : 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', color: newItemText.trim() ? 'var(--amber)' : 'var(--muted)', cursor: newItemText.trim() ? 'pointer' : 'default', fontSize: '.82rem' }}>+</button>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '.3rem', fontSize: '.72rem', color: 'var(--muted)', cursor: 'pointer', flexShrink: 0 }}>
+                <input type="checkbox" checked={newItemShareable} onChange={e => setNewItemShareable(e.target.checked)} style={{ accentColor: 'var(--amber)' }} />
+                👥 Partageable
+              </label>
             </div>
 
             {/* Add category */}

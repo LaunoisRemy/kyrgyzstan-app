@@ -59,8 +59,8 @@ Découpage des tâches pour reprendre avec Claude Code. Pas de code ici, juste l
 ### Phase 3a — Couche de données + onglet Orga autonome ✅ Fait
 `src/slots.js` (logique pure : createSlot/getSlotStatus/canJoin/joinSlot/leaveSlot), store `kg-slots`, nouvel onglet "🧩 Orga" avec création de slot libre, inscription/désinscription, suppression (confirm-gated via la modale maison), indicateur couvert/partiel/complet coloré. US 3.2 couverte.
 
-### Phase 3b — Rattachement checklist ✅ Fait
-Bouton 👥 sur chaque item de checklist : premier clic crée un slot rattaché (capacité 2 par défaut) et ouvre une sous-ligne repliable (inscrits, S'inscrire/Se retirer, capacité ajustable, case "Afficher dans Orga"). Suppression d'un item cascade sur son slot. Sauvegardes nommées de checklist retirent le lien `slotId` au moment du snapshot (jamais de lien mort resurgi à la restauration). Testé en live : synchro bidirectionnelle Checklist ↔ Orga confirmée. US 3.1 couverte — Phase 3 complète.
+### Phase 3b — Rattachement checklist ✅ Fait (revu)
+Un item de checklist peut être marqué **"partageable"** (case à la création, ou activable après coup sur un item existant). Contrairement à la première version, **un item partageable peut porter plusieurs slots indépendants** — un par personne qui coche la case en apportant le sien (ex: Rémy ET Maëlle ont chacun leur tente sous le même item "Tente", chacun avec sa propre capacité et ses propres inscrits). Cocher la case pour soi crée/rejoint automatiquement son propre slot ; décocher le retire (confirmation si quelqu'un d'autre y est inscrit). N'importe qui peut s'inscrire sur le slot de quelqu'un d'autre sans cocher l'item lui-même. Un panneau "🎒 Objets partagés" en haut de la Checklist liste tous les items partageables et leurs slots en un coup d'œil. Suppression d'un item cascade sur tous ses slots. Testé en live avec un item de test (double slot, jointure croisée, suppression) — donnée réelle (Tente de Rémy+Henri) non affectée. US 3.1 couverte — Phase 3 complète.
 
 ### Le principe de base (l'entité "slot")
 
